@@ -2,9 +2,9 @@ name: box
 version: 0.0.1
 description: Box Data Store
 dependencies:
-  io: any
-  exportable: any
-  collection: any
-  reflective: any
+  io: ">=0.1.0-git <0.2.0-git"
+  exportable: ">=0.1.0 <0.2.0"
+  collection: ">=1.0.0 <2.0.0"
+  reflective: ">=0.0.0 <0.1.0"
 dev_dependencies:
   unittest: any
