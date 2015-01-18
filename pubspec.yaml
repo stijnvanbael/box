@@ -1,0 +1,10 @@
+name: box
+version: 0.0.1
+description: Box Data Store
+dependencies:
+  io: any
+  exportable: any
+  collection: any
+  reflective: any
+dev_dependencies:
+  unittest: any
