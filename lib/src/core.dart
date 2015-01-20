@@ -44,7 +44,7 @@ class FileBox extends Box {
       file.deleteSync();
     }
     return file.create(recursive: true).then((file) {
-      Json json = Conversion.convert(entities[type]).to(Json);
+      Json json = Conversion.convert(entities[type].values).to(Json);
       return file.writeAsString(json.toString());
     });
   }
@@ -53,16 +53,15 @@ class FileBox extends Box {
     return new File(_path + '/' + type);
   }
 
-  Future<Map> _load(TypeReflection reflection) {
+  Future<List> _load(TypeReflection reflection) {
     File file = _fileOf(reflection.name);
     return file.exists().then((exists) {
       if (exists) {
         return file.readAsString().then((value) {
-          return Conversion.convert(new Json(value)).to(Map, [String, reflection.type]);
+          return Conversion.convert(new Json(value)).to(List, [reflection.type]);
         });
       } else {
-        return new Future.value({
-        });
+        return new Future.value([]);
       }
     });
   }
@@ -72,7 +71,7 @@ class FileBox extends Box {
     String typeName = reflection.name;
     if (!entities.containsKey(typeName)) {
       return _load(reflection).then((values) {
-        entities[typeName] = values;
+        entities[typeName] = Maps.index(values, (value) => _keyOf(value));
         return super.find(type, key);
       });
     }

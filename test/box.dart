@@ -49,12 +49,32 @@ main() {
       expect(await box.find(User, 'jdoe'), isNull);
 
       User user = new User(handle: 'jdoe', name: 'John Doe');
-      return box.store(user).then((result) async {
+      User found = await box.store(user).then((result) async {
         box = new Box.file('.box/test');
-        expect(await box.find(User, 'jdoe'), equals(user));
-        return null;
+        return await box.find(User, 'jdoe');
       });
+      expect(found, equals(user));
+    });
 
+    test('Store and retrieve simple entity by a composite key', () async {
+      File file = new File('.box/test/box.test.Post');
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+      box = new Box.file('.box/test');
+      User user = new User(handle: 'jdoe', name: 'John Doe');
+      DateTime timestamp = DateTime.parse('2014-12-11T10:09:08Z');
+      expect(await box.find(Post, [user, timestamp]), isNull);
+
+      Post post = new Post(
+          user: user,
+          timestamp: timestamp,
+          text: 'I just discovered dart-box, it\'s awesome!');
+      Post found = await box.store(post).then((result) async {
+        box = new Box.file('.box/test');
+        return await box.find(Post, [user, timestamp]);
+      });
+      expect(found, equals(post));
     });
   });
 }
@@ -72,9 +92,8 @@ class User {
 
   bool operator ==(other) {
     if (other is! User) return false;
-    User person = other;
-    return (person.handle == handle &&
-    person.name == name);
+    User user = other;
+    return (user.handle == handle && user.name == name);
   }
 }
 
@@ -86,4 +105,12 @@ class Post {
   String text;
 
   Post({this.user, this.timestamp, this.text});
+
+  int get hashCode => Objects.hash([user, timestamp, text]);
+
+  bool operator ==(other) {
+    if (other is! Post) return false;
+    Post post = other;
+    return (post.user == user && post.timestamp == timestamp && post.text == text);
+  }
 }
