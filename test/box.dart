@@ -35,6 +35,43 @@ main() {
 
       expect(await box.find(Post, [user, timestamp]), equals(post));
     });
+
+    test('Equals predicate, unique', () async {
+      User jdoe = new User(handle: 'jdoe', name: 'John Doe');
+      User crollis = new User(handle: 'crollis', name: 'Christine Rollis');
+      User cstone = new User(handle: 'cstone', name: 'Cora Stone');
+      User dsnow = new User(handle: 'dsnow', name: 'Donovan Snow');
+      User koneil = new User(handle: 'koneil', name: 'Kendall Oneil');
+      box.store(jdoe);
+      box.store(crollis);
+      box.store(cstone);
+      box.store(dsnow);
+      box.store(koneil);
+
+      expect(await box.query(User)
+      .where('name').equals('Cora Stone')
+      .unique().get(),
+      equals(cstone));
+    });
+
+    test('Like predicate, list, order by', () async {
+      User jdoe = new User(handle: 'jdoe', name: 'John Doe');
+      User crollis = new User(handle: 'crollis', name: 'Christine Rollis');
+      User cstone = new User(handle: 'cstone', name: 'Cora Stone');
+      User dsnow = new User(handle: 'dsnow', name: 'Donovan Snow');
+      User koneil = new User(handle: 'koneil', name: 'Kendall Oneil');
+      box.store(jdoe);
+      box.store(crollis);
+      box.store(cstone);
+      box.store(dsnow);
+      box.store(koneil);
+
+      expect(await box.query(User)
+      .where('name').like('C%')
+      .orderBy('name').ascending()
+      .list(),
+      equals([crollis, cstone]));
+    });
   });
 
   group('File-based', () {

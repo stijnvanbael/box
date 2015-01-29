@@ -11,10 +11,10 @@ class Box {
   store(Object entity) {
     String type = new TypeReflection.fromInstance(entity).name;
     entities.putIfAbsent(type, () => new Map());
-    entities[type][_keyOf(entity)] = entity;
+    entities[type][keyOf(entity)] = entity;
   }
 
-  _keyOf(Object entity) {
+  static keyOf(Object entity) {
     TypeReflection type = new TypeReflection.fromInstance(entity);
     Iterable key = type.fieldsWith(Key).values.map((field) => field.value(entity));
     return key.length == 1 ? key.first : new Composite(key);
@@ -24,59 +24,126 @@ class Box {
     Map entitiesForType = entities[new TypeReflection(type).name];
     return entitiesForType != null ? entitiesForType[key is Iterable ? new Composite(key) : key] : null;
   }
+
+  QueryStep query(Type type) {
+    return new QueryStep(type, this);
+  }
 }
 
-class FileBox extends Box {
-  String _path;
+class QueryStep<T> extends ExpectationStep<T> {
 
-  FileBox(this._path) {
-    installJsonConverters();
+  QueryStep(type, box) : super(type, box);
+
+  QueryStep.withPredicate(QueryStep<T> query, Predicate<T> predicate) : super(query.type, query.box, predicate);
+
+  WhereStep<T> where(String field) => new WhereStep(field, this);
+
+  OrderByStep<T> orderBy(String field) => new OrderByStep(field, this);
+}
+
+class WhereStep<T> {
+  String field;
+  QueryStep<T> query;
+
+  WhereStep(this.field, this.query);
+
+  QueryStep<T> like(String expression) => new QueryStep.withPredicate(query, new LikePredicate(query.type, field, expression));
+
+  QueryStep<T> equals(String expression) => new QueryStep.withPredicate(query, new EqualsPredicate(query.type, field, expression));
+}
+
+class OrderByStep<T> {
+  QueryStep<T> query;
+  String field;
+
+  OrderByStep(this.field, this.query);
+
+  ExpectationStep<T> ascending() => new ExpectationStep(query.type, query.box, query.predicate, new Ascending(query.type, field));
+}
+
+class ExpectationStep<T> {
+  Type type;
+  Box box;
+  Predicate<T> predicate;
+  Ordering<T> ordering;
+
+  ExpectationStep(this.type, this.box, [this.predicate, this.ordering]);
+
+  List<T> list() {
+    List<T> list = new List.from(box.entities[new TypeReflection(type).name]
+    .values
+    .where((object) => predicate.evaluate(object)));
+    list.sort((object1, object2) => ordering.compare(object1, object2));
+    return list;
   }
 
-  store(Object entity) {
-    super.store(entity);
-    return new Future(() => _persist(new TypeReflection.fromInstance(entity).name));
+  Optional<T> unique() {
+    return new Optional.ofIterable(list());
+  }
+}
+
+class Ascending<T> extends Ordering<T> {
+  Ascending(Type type, String field) : super(type, field);
+
+  int compare(T object1, T object2) {
+    FieldReflection fieldReflection = new TypeReflection(type).fields[field];
+    var value1 = fieldReflection.value(object1);
+    var value2 = fieldReflection.value(object2);
+    return value1.toString().compareTo(value2);
+  }
+}
+
+abstract class Ordering<T> {
+  final Type type;
+  final String field;
+
+  const Ordering(this.type, this.field);
+
+  int compare(T object1, T object2);
+}
+
+const Unordered unordered = const Unordered();
+
+class Unordered extends Ordering {
+  const Unordered() : super(null, null);
+
+  int compare(object1, object2) {
+    return null;
+  }
+}
+
+class LikePredicate<T> extends Predicate<T> {
+  Type type;
+  String field;
+  RegExp expression;
+
+  LikePredicate(Type type, String field, String expression) {
+    this.type = type;
+    this.field = field;
+    this.expression = new RegExp(expression.replaceAll(new RegExp(r'%'), '.*'));
   }
 
-  _persist(String type) {
-    File file = _fileOf(type);
-    if (file.existsSync()) {
-      file.deleteSync();
-    }
-    return file.create(recursive: true).then((file) {
-      Json json = Conversion.convert(entities[type].values).to(Json);
-      return file.writeAsString(json.toString());
-    });
+  bool evaluate(T object) {
+    var value = new TypeReflection(type).fields[field].value(object);
+    return expression.hasMatch(value.toString());
   }
+}
 
-  File _fileOf(String type) {
-    return new File(_path + '/' + type);
-  }
+class EqualsPredicate<T> extends Predicate<T> {
+  Type type;
+  String field;
+  String expression;
 
-  Future<List> _load(TypeReflection reflection) {
-    File file = _fileOf(reflection.name);
-    return file.exists().then((exists) {
-      if (exists) {
-        return file.readAsString().then((value) {
-          return Conversion.convert(new Json(value)).to(List, [reflection.type]);
-        });
-      } else {
-        return new Future.value([]);
-      }
-    });
-  }
+  EqualsPredicate(this.type, this.field, this.expression);
 
-  Future find(Type type, key) {
-    TypeReflection reflection = new TypeReflection(type);
-    String typeName = reflection.name;
-    if (!entities.containsKey(typeName)) {
-      return _load(reflection).then((values) {
-        entities[typeName] = Maps.index(values, (value) => _keyOf(value));
-        return super.find(type, key);
-      });
-    }
-    return super.find(type, key);
+  bool evaluate(T object) {
+    var value = new TypeReflection(type).fields[field].value(object);
+    return expression == value.toString();
   }
+}
+
+abstract class Predicate<T> {
+  bool evaluate(T object);
 }
 
 class Composite {
@@ -84,7 +151,7 @@ class Composite {
 
   Composite(this.components);
 
-  int get hashCode => components.reduce((Object c1, Object c2) => 11 * c1.hashCode + 17 * c2.hashCode);
+  int get hashCode => components.map((c) => 11 * c.hashCode).reduce((int c1, int c2) => c1 + 17 * c2);
 
   bool operator ==(other) {
     if (other == null || !(other is Composite)) {
@@ -100,99 +167,5 @@ class Key {
 
 const key = const Key();
 
-abstract class Optional<T> {
 
-  const Optional();
-
-  factory Optional.of(T value) {
-    return value == null ? empty : new Present(value);
-  }
-
-  T get();
-
-  T orElse(T other);
-
-  T orNull();
-
-  T or(T supplier());
-
-  Optional map(dynamic mapper(T value));
-
-  Optional expand(Optional mapper(T value));
-
-  Optional<T> where(bool predicate(T value));
-
-  List<T> toList();
-
-  Optional<T> ifPresent(void handler(T value));
-
-  Optional<T> ifAbsent(void handler());
-
-  bool isPresent();
-}
-
-const empty = const Empty();
-
-class Empty<T> extends Optional<T> {
-  const Empty();
-
-  T get() => throw new AbsentException();
-
-  T orElse(T other) => other;
-
-  T orNull() => null;
-
-  T or(T supplier()) => supplier();
-
-  Optional map(dynamic mapper(T value)) => this;
-
-  Optional expand(Optional mapper(T value)) => this;
-
-  Optional<T> where(bool predicate(T value)) => this;
-
-  List<T> toList() => [];
-
-  Optional<T> ifPresent(void handler(T value)) => this;
-
-  Optional<T> ifAbsent(void handler()) {
-    handler();
-    return this;
-  }
-
-  bool isPresent() => false;
-}
-
-class Present<T> extends Optional<T> {
-  T value;
-
-  Present(this.value);
-
-  T get() => value;
-
-  T orElse(T other) => value;
-
-  T orNull() => value;
-
-  T or(T supplier()) => value;
-
-  Optional map(dynamic mapper(T value)) => new Optional.of(mapper(value));
-
-  Optional expand(Optional mapper(T value)) => mapper(value);
-
-  Optional<T> where(bool predicate(T value)) => predicate(value) ? this : empty;
-
-  List<T> toList() => [value];
-
-  Optional<T> ifPresent(void handler(T value)) {
-    handler(value);
-    return this;
-  }
-
-  Optional<T> ifAbsent(void handler()) => this;
-
-  bool isPresent() => true;
-}
-
-class AbsentException {
-}
 
