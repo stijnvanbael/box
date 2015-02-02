@@ -31,8 +31,7 @@ class Box {
 }
 
 class QueryStep<T> extends ExpectationStep<T> {
-
-  QueryStep(type, box) : super(type, box);
+  QueryStep(Type type, Box box) : super(type, box);
 
   QueryStep.withPredicate(QueryStep<T> query, Predicate<T> predicate) : super(query.type, query.box, predicate);
 
@@ -41,15 +40,33 @@ class QueryStep<T> extends ExpectationStep<T> {
   OrderByStep<T> orderBy(String field) => new OrderByStep(field, this);
 }
 
+class NotQueryStep<T> extends QueryStep<T> {
+  QueryStep<T> query;
+
+  NotQueryStep(QueryStep<T> query) : super(query.type, query.box) {
+    this.query = query;
+  }
+
+  Predicate<T> createPredicate() => new NotPredicate(query.predicate);
+}
+
 class WhereStep<T> {
   String field;
   QueryStep<T> query;
+  bool _not = false;
 
   WhereStep(this.field, this.query);
 
-  QueryStep<T> like(String expression) => new QueryStep.withPredicate(query, new LikePredicate(query.type, field, expression));
+  WhereStep<T> not() {
+    _not = true;
+    return this;
+  }
 
-  QueryStep<T> equals(String expression) => new QueryStep.withPredicate(query, new EqualsPredicate(query.type, field, expression));
+  QueryStep<T> like(String expression) => _wrap(new QueryStep.withPredicate(query, new LikePredicate(query.type, field, expression)));
+
+  QueryStep<T> equals(String expression) => _wrap(new QueryStep.withPredicate(query, new EqualsPredicate(query.type, field, expression)));
+
+  QueryStep<T> _wrap(QueryStep<T> query) => _not ? new NotQueryStep(query) : query;
 }
 
 class OrderByStep<T> {
@@ -58,7 +75,9 @@ class OrderByStep<T> {
 
   OrderByStep(this.field, this.query);
 
-  ExpectationStep<T> ascending() => new ExpectationStep(query.type, query.box, query.predicate, new Ascending(query.type, field));
+  ExpectationStep<T> ascending() => new ExpectationStep(query.type, query.box, query.createPredicate(), new Ascending(query.type, field));
+
+  ExpectationStep<T> descending() => new ExpectationStep(query.type, query.box, query.createPredicate(), new Descending(query.type, field));
 }
 
 class ExpectationStep<T> {
@@ -77,6 +96,8 @@ class ExpectationStep<T> {
     return list;
   }
 
+  Predicate<T> createPredicate() => predicate;
+
   Optional<T> unique() {
     return new Optional.ofIterable(list());
   }
@@ -90,6 +111,17 @@ class Ascending<T> extends Ordering<T> {
     var value1 = fieldReflection.value(object1);
     var value2 = fieldReflection.value(object2);
     return value1.toString().compareTo(value2);
+  }
+}
+
+class Descending<T> extends Ordering<T> {
+  Descending(Type type, String field) : super(type, field);
+
+  int compare(T object1, T object2) {
+    FieldReflection fieldReflection = new TypeReflection(type).fields[field];
+    var value1 = fieldReflection.value(object1);
+    var value2 = fieldReflection.value(object2);
+    return -value1.toString().compareTo(value2);
   }
 }
 
@@ -144,6 +176,14 @@ class EqualsPredicate<T> extends Predicate<T> {
 
 abstract class Predicate<T> {
   bool evaluate(T object);
+}
+
+class NotPredicate<T> extends Predicate<T> {
+  Predicate<T> delegate;
+
+  NotPredicate(this.delegate);
+
+  bool evaluate(T object) => !delegate.evaluate(object);
 }
 
 class Composite {
