@@ -89,10 +89,9 @@ class ExpectationStep<T> {
   ExpectationStep(this.type, this.box, [this.predicate, this.ordering]);
 
   List<T> list() {
-    List<T> list = new List.from(box.entities[new TypeReflection(type).name]
-    .values
-    .where((object) => predicate.evaluate(object)));
-    list.sort((object1, object2) => ordering.compare(object1, object2));
+    List<T> list = new List.from(box.entities[new TypeReflection(type).name].values);
+    if (predicate != null) list = new List.from(list.where((object) => predicate.evaluate(object)));
+    if (ordering != null) list.sort((object1, object2) => ordering.compare(object1, object2));
     return list;
   }
 
@@ -107,9 +106,8 @@ class Ascending<T> extends Ordering<T> {
   Ascending(Type type, String field) : super(type, field);
 
   int compare(T object1, T object2) {
-    FieldReflection fieldReflection = new TypeReflection(type).fields[field];
-    var value1 = fieldReflection.value(object1);
-    var value2 = fieldReflection.value(object2);
+    var value1 = valueOf(object1);
+    var value2 = valueOf(object2);
     return value1.toString().compareTo(value2);
   }
 }
@@ -118,9 +116,8 @@ class Descending<T> extends Ordering<T> {
   Descending(Type type, String field) : super(type, field);
 
   int compare(T object1, T object2) {
-    FieldReflection fieldReflection = new TypeReflection(type).fields[field];
-    var value1 = fieldReflection.value(object1);
-    var value2 = fieldReflection.value(object2);
+    var value1 = valueOf(object1);
+    var value2 = valueOf(object2);
     return -value1.toString().compareTo(value2);
   }
 }
@@ -128,49 +125,58 @@ class Descending<T> extends Ordering<T> {
 abstract class Ordering<T> {
   final Type type;
   final String field;
+  FieldReflection fieldReflection;
 
-  const Ordering(this.type, this.field);
+  Ordering(this.type, this.field) {
+    TypeReflection typeReflection = new TypeReflection(type);
+    this.fieldReflection = typeReflection.fields[field];
+    if (fieldReflection == null) {
+      throw new Exception('Field not found: ' + typeReflection.toString() + '.' + field);
+    }
+  }
 
   int compare(T object1, T object2);
-}
 
-const Unordered unordered = const Unordered();
-
-class Unordered extends Ordering {
-  const Unordered() : super(null, null);
-
-  int compare(object1, object2) {
-    return null;
+  valueOf(T object) {
+    return fieldReflection.value(object);
   }
 }
 
-class LikePredicate<T> extends Predicate<T> {
-  Type type;
-  String field;
-  RegExp expression;
+class LikePredicate<T> extends ExpressionPredicate<T, RegExp> {
 
-  LikePredicate(Type type, String field, String expression) {
-    this.type = type;
-    this.field = field;
-    this.expression = new RegExp(expression.replaceAll(new RegExp(r'%'), '.*'));
-  }
+  LikePredicate(Type type, String field, String expression)
+  : super(type, field, new RegExp(expression.replaceAll(new RegExp(r'%'), '.*')));
 
   bool evaluate(T object) {
-    var value = new TypeReflection(type).fields[field].value(object);
-    return expression.hasMatch(value.toString());
+    var value = valueOf(object);
+    return value != null && expression.hasMatch(value.toString());
   }
 }
 
-class EqualsPredicate<T> extends Predicate<T> {
-  Type type;
-  String field;
-  String expression;
+class EqualsPredicate<T> extends ExpressionPredicate<T, String> {
 
-  EqualsPredicate(this.type, this.field, this.expression);
+  EqualsPredicate(Type type, String field, String expression): super(type, field, expression);
 
   bool evaluate(T object) {
-    var value = new TypeReflection(type).fields[field].value(object);
-    return expression == value.toString();
+    var value = valueOf(object);
+    return value != null && expression == value.toString();
+  }
+}
+
+abstract class ExpressionPredicate<T, E> extends Predicate<T> {
+  Type type;
+  String field;
+  E expression;
+
+  ExpressionPredicate(this.type, this.field, this.expression);
+
+  valueOf(T object) {
+    TypeReflection typeReflection = new TypeReflection(type);
+    FieldReflection fieldReflection = typeReflection.fields[field];
+    if (fieldReflection == null) {
+      throw new Exception('Field not found: ' + typeReflection.toString() + '.' + field);
+    }
+    return fieldReflection.value(object);
   }
 }
 
