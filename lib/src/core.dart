@@ -17,6 +17,9 @@ class Box {
   static keyOf(Object entity) {
     TypeReflection type = new TypeReflection.fromInstance(entity);
     Iterable key = type.fieldsWith(Key).values.map((field) => field.value(entity));
+    if(key.isEmpty) {
+      throw new Exception('No fields found with @key in $type');
+    }
     return key.length == 1 ? key.first : new Composite(key);
   }
 
@@ -129,9 +132,9 @@ abstract class Ordering<T> {
 
   Ordering(this.type, this.field) {
     TypeReflection typeReflection = new TypeReflection(type);
-    this.fieldReflection = typeReflection.fields[field];
+    this.fieldReflection = typeReflection.field(field);
     if (fieldReflection == null) {
-      throw new Exception('Field not found: ' + typeReflection.toString() + '.' + field);
+      throw new Exception('Field not found: $typeReflection.' + field);
     }
   }
 
