@@ -175,9 +175,9 @@ abstract class ExpressionPredicate<T, E> extends Predicate<T> {
 
   valueOf(T object) {
     TypeReflection typeReflection = new TypeReflection(type);
-    FieldReflection fieldReflection = typeReflection.fields[field];
+    FieldReflection fieldReflection = typeReflection.field(field);
     if (fieldReflection == null) {
-      throw new Exception('Field not found: ' + typeReflection.toString() + '.' + field);
+      throw new Exception('Field not found: $typeReflection.' + field);
     }
     return fieldReflection.value(object);
   }
