@@ -5,13 +5,12 @@ class Box {
 
   factory Box.file(String filename) => new FileBox(filename);
 
-  Map<String, Map> entities = {
+  Map<String, Map> _entities = {
   };
 
   store(Object entity) {
     String type = new TypeReflection.fromInstance(entity).name;
-    entities.putIfAbsent(type, () => new Map());
-    entities[type][keyOf(entity)] = entity;
+    _entitiesFor(type)[keyOf(entity)] = entity;
   }
 
   static keyOf(Object entity) {
@@ -24,12 +23,17 @@ class Box {
   }
 
   Future find(Type type, key) async {
-    Map entitiesForType = entities[new TypeReflection(type).name];
+    Map entitiesForType = _entitiesFor(new TypeReflection(type).name);
     return entitiesForType != null ? entitiesForType[key is Iterable ? new Composite(key) : key] : null;
   }
 
   QueryStep query(Type type) {
     return new QueryStep(type, this);
+  }
+
+  Map<String, Map> _entitiesFor(String type) {
+    _entities.putIfAbsent(type, () => new Map());
+    return _entities[type];
   }
 }
 
@@ -92,7 +96,7 @@ class ExpectationStep<T> {
   ExpectationStep(this.type, this.box, [this.predicate, this.ordering]);
 
   List<T> list() {
-    List<T> list = new List.from(box.entities[new TypeReflection(type).name].values);
+    List<T> list = new List.from(box._entitiesFor(new TypeReflection(type).name).values);
     if (predicate != null) list = new List.from(list.where((object) => predicate.evaluate(object)));
     if (ordering != null) list.sort((object1, object2) => ordering.compare(object1, object2));
     return list;

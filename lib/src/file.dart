@@ -19,7 +19,7 @@ class FileBox extends Box {
       file.deleteSync();
     }
     return file.create(recursive: true).then((file) {
-      BoxJson json = Conversion.convert(entities[type].values).to(BoxJson);
+      BoxJson json = Conversion.convert(_entitiesFor(type).values).to(BoxJson);
       return file.writeAsString(json.toString());
     });
   }
@@ -44,9 +44,9 @@ class FileBox extends Box {
   Future find(Type type, key) {
     TypeReflection reflection = new TypeReflection(type);
     String typeName = reflection.name;
-    if (!entities.containsKey(typeName)) {
+    if (!_entities.containsKey(typeName)) {
       return _load(reflection).then((values) {
-        entities[typeName] = Maps.index(values, (value) => Box.keyOf(value));
+        _entities[typeName] = Maps.index(values, (value) => Box.keyOf(value));
         return super.find(type, key);
       });
     }
