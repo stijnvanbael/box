@@ -48,9 +48,9 @@ main() {
       box.store(dsnow);
       box.store(koneil);
 
-      expect(await box.query(User)
+      expect((await box.query(User)
       .where('name').equals('Cora Stone')
-      .unique().get(),
+      .unique()).get(),
       equals(cstone));
     });
 

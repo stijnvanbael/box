@@ -15,8 +15,11 @@ class Box {
 
   static keyOf(Object entity) {
     TypeReflection type = new TypeReflection.fromInstance(entity);
-    Iterable key = type.fieldsWith(Key).values.map((field) => field.value(entity));
-    if(key.isEmpty) {
+    Iterable key = type
+        .fieldsWith(Key)
+        .values
+        .map((field) => field.value(entity));
+    if (key.isEmpty) {
       throw new Exception('No fields found with @key in $type');
     }
     return key.length == 1 ? key.first : new Composite(key);
@@ -24,14 +27,20 @@ class Box {
 
   Future find(Type type, key) async {
     Map entitiesForType = _entitiesFor(new TypeReflection(type).name);
-    return entitiesForType != null ? entitiesForType[key is Iterable ? new Composite(key) : key] : null;
+    return entitiesForType != null ? entitiesForType[key is Iterable
+        ? new Composite(key)
+        : key] : null;
+  }
+
+  Future<List> _load(TypeReflection type) {
+    return new Future(() => new List.from(_entitiesFor(type.name).values));
   }
 
   QueryStep query(Type type) {
     return new QueryStep(type, this);
   }
 
-  Map<String, Map> _entitiesFor(String type) {
+  Map _entitiesFor(String type) {
     _entities.putIfAbsent(type, () => new Map());
     return _entities[type];
   }
@@ -40,7 +49,8 @@ class Box {
 class QueryStep<T> extends ExpectationStep<T> {
   QueryStep(Type type, Box box) : super(type, box);
 
-  QueryStep.withPredicate(QueryStep<T> query, Predicate<T> predicate) : super(query.type, query.box, predicate);
+  QueryStep.withPredicate(QueryStep<T> query, Predicate<T> predicate)
+      : super(query.type, query.box, predicate);
 
   WhereStep<T> where(String field) => new WhereStep(field, this);
 
@@ -69,11 +79,14 @@ class WhereStep<T> {
     return this;
   }
 
-  QueryStep<T> like(String expression) => _wrap(new QueryStep.withPredicate(query, new LikePredicate(query.type, field, expression)));
+  QueryStep<T> like(String expression) => _wrap(new QueryStep.withPredicate(
+      query, new LikePredicate(query.type, field, expression)));
 
-  QueryStep<T> equals(String expression) => _wrap(new QueryStep.withPredicate(query, new EqualsPredicate(query.type, field, expression)));
+  QueryStep<T> equals(String expression) => _wrap(new QueryStep.withPredicate(
+      query, new EqualsPredicate(query.type, field, expression)));
 
-  QueryStep<T> _wrap(QueryStep<T> query) => _not ? new NotQueryStep(query) : query;
+  QueryStep<T> _wrap(QueryStep<T> query) =>
+      _not ? new NotQueryStep(query) : query;
 }
 
 class OrderByStep<T> {
@@ -82,9 +95,13 @@ class OrderByStep<T> {
 
   OrderByStep(this.field, this.query);
 
-  ExpectationStep<T> ascending() => new ExpectationStep(query.type, query.box, query.createPredicate(), new Ascending(query.type, field));
+  ExpectationStep<T> ascending() => new ExpectationStep(
+      query.type, query.box, query.createPredicate(),
+      new Ascending(query.type, field));
 
-  ExpectationStep<T> descending() => new ExpectationStep(query.type, query.box, query.createPredicate(), new Descending(query.type, field));
+  ExpectationStep<T> descending() => new ExpectationStep(
+      query.type, query.box, query.createPredicate(),
+      new Descending(query.type, field));
 }
 
 class ExpectationStep<T> {
@@ -95,17 +112,20 @@ class ExpectationStep<T> {
 
   ExpectationStep(this.type, this.box, [this.predicate, this.ordering]);
 
-  List<T> list() {
-    List<T> list = new List.from(box._entitiesFor(new TypeReflection(type).name).values);
-    if (predicate != null) list = new List.from(list.where((object) => predicate.evaluate(object)));
-    if (ordering != null) list.sort((object1, object2) => ordering.compare(object1, object2));
-    return list;
+  Future<List<T>> list() {
+    return box._load(new TypeReflection(type)).then((list) {
+      if (predicate != null) list =
+      new List.from(list.where((object) => predicate.evaluate(object)));
+      if (ordering != null) list.sort((object1, object2) =>
+          ordering.compare(object1, object2));
+      return list;
+    });
   }
 
   Predicate<T> createPredicate() => predicate;
 
-  Optional<T> unique() {
-    return new Optional.ofIterable(list());
+  Future<Optional<T>> unique() {
+    return list().then((list) => new Optional.ofIterable(list));
   }
 }
 
@@ -152,7 +172,8 @@ abstract class Ordering<T> {
 class LikePredicate<T> extends ExpressionPredicate<T, RegExp> {
 
   LikePredicate(Type type, String field, String expression)
-  : super(type, field, new RegExp(expression.replaceAll(new RegExp(r'%'), '.*')));
+      : super(
+      type, field, new RegExp(expression.replaceAll(new RegExp(r'%'), '.*')));
 
   bool evaluate(T object) {
     var value = valueOf(object);
@@ -162,7 +183,8 @@ class LikePredicate<T> extends ExpressionPredicate<T, RegExp> {
 
 class EqualsPredicate<T> extends ExpressionPredicate<T, String> {
 
-  EqualsPredicate(Type type, String field, String expression): super(type, field, expression);
+  EqualsPredicate(Type type, String field, String expression)
+      : super(type, field, expression);
 
   bool evaluate(T object) {
     var value = valueOf(object);
@@ -204,7 +226,9 @@ class Composite {
 
   Composite(this.components);
 
-  int get hashCode => components.map((c) => 11 * c.hashCode).reduce((int c1, int c2) => c1 + 17 * c2);
+  int get hashCode =>
+      components.map((c) => 11 * c.hashCode).reduce((int c1, int c2) => c1 +
+          17 * c2);
 
   bool operator ==(other) {
     if (other == null || !(other is Composite)) {
