@@ -114,10 +114,10 @@ class ExpectationStep<T> {
 
   Future<List<T>> list() {
     return box._load(new TypeReflection(type)).then((list) {
-      if (predicate != null) list =
-      new List.from(list.where((object) => predicate.evaluate(object)));
-      if (ordering != null) list.sort((object1, object2) =>
-          ordering.compare(object1, object2));
+      if (predicate != null)
+        list = new List.from(list.where((object) => predicate.evaluate(object)));
+      if (ordering != null)
+        list.sort((object1, object2) => ordering.compare(object1, object2));
       return list;
     });
   }
