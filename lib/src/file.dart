@@ -64,7 +64,7 @@ class FileBox extends Box {
         })
         .where((item) => item != null);
       }
-      return new Stream.empty();
+      return new Stream.fromIterable([]);
     })).asyncExpand((Stream stream) => stream);
   }
 
