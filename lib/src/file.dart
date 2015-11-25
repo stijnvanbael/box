@@ -10,17 +10,28 @@ class FileBox extends Box {
 
   store(Object entity) {
     super.store(entity);
-    return new Future(() => _persist(new TypeReflection.fromInstance(entity).name));
+    return new Future(() =>
+        _persist(new TypeReflection.fromInstance(entity)));
   }
 
-  _persist(String type) {
-    File file = _fileOf(type);
+  _persist(TypeReflection type) {
+    File file = _fileOf(type.name);
     if (file.existsSync()) {
       file.deleteSync();
     }
     return file.create(recursive: true).then((file) {
-      BoxJson json = Conversion.convert(_entitiesFor(type).values).to(BoxJson);
-      return file.writeAsString(json.toString());
+      return _entitiesFor(type).then((entities) {
+        file.writeAsString('[\n').then((file) {
+          return new Stream.fromIterable(entities.values)
+              .map((value) => Conversion.convert(value).to(BoxJson).toString())
+              .join("\n")
+              .then((json) {
+            return file.writeAsString(json.toString(), mode: FileMode.APPEND)
+                .then((file) =>
+                file.writeAsString('\n]', mode: FileMode.APPEND));
+          });
+        });
+      });
     });
   }
 
@@ -28,25 +39,42 @@ class FileBox extends Box {
     return new File(_path + '/' + type);
   }
 
-  Future<List> _load(TypeReflection reflection) {
+  Future<Map> _entitiesFor(TypeReflection type) {
+    _entities.putIfAbsent(type.name, () => new Map());
+    if (_entities[type.name].isEmpty) {
+      return _load(type).toList().then((values) {
+        _entities[type.name] = Maps.index(values, (value) => Box.keyOf(value));
+        return _entities[type.name];
+      });
+    }
+    return new Future.value(_entities[type.name]);
+  }
+
+  Stream _load(TypeReflection reflection) {
     File file = _fileOf(reflection.name);
-    return file.exists().then((exists) {
+    return new Stream.fromFuture(file.exists().then((exists) {
       if (exists) {
-        return file.readAsString().then((value) {
-          return Conversion.convert(new BoxJson(value)).to(List, [reflection.type]);
-        });
-      } else {
-        return new Future.value([]);
+        return file.openRead()
+            .transform(UTF8.decoder)
+            .transform(const LineSplitter())
+            .map((line) {
+          if (line.startsWith("{"))
+            return Conversion.convert(new BoxJson(line)).to(reflection.type);
+          return null;
+        })
+        .where((item) => item != null);
       }
-    });
+      return new Stream.empty();
+    })).asyncExpand((Stream stream) => stream);
   }
 
   Future find(Type type, key) {
     TypeReflection reflection = new TypeReflection(type);
     String typeName = reflection.name;
-    if (!_entities.containsKey(typeName)) {
-      return _load(reflection).then((values) {
-        _entities[typeName] = Maps.index(values, (value) => Box.keyOf(value));
+    if (_entities.isEmpty) {
+      return _load(reflection).toList().then((values) {
+        _entities[typeName] = Maps.index(values,
+            (value) => Box.keyOf(value));
         return super.find(type, key);
       });
     }
@@ -55,7 +83,8 @@ class FileBox extends Box {
 }
 
 class ObjectToBoxJson extends ConverterBase<Object, BoxJson> {
-  ObjectToBoxJson() : super(new TypeReflection(Object), new TypeReflection(BoxJson));
+  ObjectToBoxJson()
+      : super(new TypeReflection(Object), new TypeReflection(BoxJson));
 
   BoxJson convertTo(Object object, TypeReflection targetReflection) {
     var simplified = _convert(object);
@@ -65,7 +94,8 @@ class ObjectToBoxJson extends ConverterBase<Object, BoxJson> {
   _convert(object) {
     if (object is DateTime) {
       return object.toString();
-    } else if (object == null || object is String || object is num || object is bool) {
+    } else if (object == null || object is String || object is num ||
+        object is bool) {
       return object;
     } else if (object is Iterable) {
       return new List.from(object.map((item) => _convert(item)));
@@ -77,11 +107,11 @@ class ObjectToBoxJson extends ConverterBase<Object, BoxJson> {
     } else {
       TypeReflection type = new TypeReflection.fromInstance(object);
       return type.fields.values
-      .where((field) => !field.has(Transient))
-      .map((field) => {
-          field.name: _convert(field.value(object))
+          .where((field) => !field.has(Transient))
+          .map((field) => {
+        field.name: _convert(field.value(object))
       })
-      .reduce((Map m1, Map m2) {
+          .reduce((Map m1, Map m2) {
         m2.addAll(m1);
         return m2;
       });
@@ -90,7 +120,8 @@ class ObjectToBoxJson extends ConverterBase<Object, BoxJson> {
 }
 
 class BoxJsonToObject extends ConverterBase<BoxJson, Object> {
-  BoxJsonToObject() : super(new TypeReflection(BoxJson), new TypeReflection(Object));
+  BoxJsonToObject()
+      : super(new TypeReflection(BoxJson), new TypeReflection(Object));
 
   Object convertTo(BoxJson json, TypeReflection targetReflection) {
     var decoded = JSON.decode(json.toString());
@@ -105,7 +136,8 @@ class BoxJsonToObject extends ConverterBase<BoxJson, Object> {
         Map map = {
         };
         object.keys.forEach((k) {
-          var newKey = keyType.sameOrSuper(k) ? k : keyType.construct(args: [k]);
+          var newKey = keyType.sameOrSuper(k) ? k : keyType.construct(
+              args: [k]);
           map[newKey] = _convert(object[k], valueType);
         });
         return map;
@@ -113,10 +145,12 @@ class BoxJsonToObject extends ConverterBase<BoxJson, Object> {
         var instance = targetReflection.construct();
         object.keys.forEach((k) {
           if (targetReflection.fields[k] == null)
-            throw new JsonException('Unknown property: ' + targetReflection.name + '.' + k);
+            throw new JsonException(
+                'Unknown property: ' + targetReflection.name + '.' + k);
         });
         Maps.forEach(targetReflection.fields,
-            (name, field) => field.set(instance, _convert(object[name], field.type)));
+            (name, field) =>
+            field.set(instance, _convert(object[name], field.type)));
         return instance;
       }
     } else if (object is Iterable) {

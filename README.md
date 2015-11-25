@@ -13,10 +13,8 @@ Support for various SQL and NoSQL databases is on the roadmap.
 Example:
 
     Box box = new Box.file('.box/test');
-    Future<List<User>> result = box.selectFrom(User)
+    Stream<User> users = box.selectFrom(User)
                                      .where('name').like('C%')
                                      .orderBy('name').ascending()
                                      .list();
-    result.then((users) => 
-        users.forEach((user) => 
-            print(user.name)));
+    users.listen((user) => print(user.name)));

@@ -1,9 +1,10 @@
 library box.test;
 
 import 'dart:io';
-import 'package:unittest/unittest.dart';
+
 import 'package:box/box.dart';
 import 'package:reflective/reflective.dart';
+import 'package:test/test.dart';
 
 main() {
   group('In-memory', () {
@@ -49,9 +50,9 @@ main() {
       box.store(koneil);
 
       expect((await box.selectFrom(User)
-      .where('name').equals('Cora Stone')
-      .unique()).get(),
-      equals(cstone));
+          .where('name').equals('Cora Stone')
+          .unique()).get(),
+          equals(cstone));
     });
 
     test('Like predicate, list, order by', () async {
@@ -67,10 +68,10 @@ main() {
       box.store(koneil);
 
       expect(await box.selectFrom(User)
-      .where('name').like('C%')
-      .orderBy('name').ascending()
-      .list(),
-      equals([crollis, cstone]));
+          .where('name').like('C%')
+          .orderBy('name').ascending()
+          .list().toList(),
+          equals([crollis, cstone]));
     });
 
     test('not, descending', () async {
@@ -86,10 +87,10 @@ main() {
       box.store(koneil);
 
       expect(await box.selectFrom(User)
-      .where('name').not().equals('Donovan Snow')
-      .orderBy('name').descending()
-      .list(),
-      equals([koneil, jdoe, cstone, crollis]));
+          .where('name').not().equals('Donovan Snow')
+          .orderBy('name').descending()
+          .list().toList(),
+          equals([koneil, jdoe, cstone, crollis]));
     });
   });
 
@@ -167,6 +168,7 @@ class Post {
   bool operator ==(other) {
     if (other is! Post) return false;
     Post post = other;
-    return (post.user == user && post.timestamp == timestamp && post.text == text);
+    return (post.user == user && post.timestamp == timestamp &&
+        post.text == text);
   }
 }

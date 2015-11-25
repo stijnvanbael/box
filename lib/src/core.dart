@@ -9,8 +9,10 @@ class Box {
   };
 
   store(Object entity) {
-    String type = new TypeReflection.fromInstance(entity).name;
-    _entitiesFor(type)[keyOf(entity)] = entity;
+    TypeReflection type = new TypeReflection.fromInstance(entity);
+    _entitiesFor(type).then((entities) {
+      entities[keyOf(entity)] = entity;
+    });
   }
 
   static keyOf(Object entity) {
@@ -19,30 +21,36 @@ class Box {
         .fieldsWith(Key)
         .values
         .map((field) => field.value(entity));
-    if (key.isEmpty) {
+    if (key.isEmpty)
       throw new Exception('No fields found with @key in $type');
-    }
     return key.length == 1 ? key.first : new Composite(key);
   }
 
   Future find(Type type, key) async {
-    Map entitiesForType = _entitiesFor(new TypeReflection(type).name);
-    return entitiesForType != null ? entitiesForType[key is Iterable
-        ? new Composite(key)
-        : key] : null;
+    return _entitiesFor(new TypeReflection(type)).then((entitiesForType) {
+      return entitiesForType != null ? entitiesForType[key is Iterable
+          ? new Composite(key)
+          : key] : null;
+    });
   }
 
-  Future<List> _load(TypeReflection type) {
-    return new Future(() => new List.from(_entitiesFor(type.name).values));
+  Stream _query(TypeReflection type, Predicate predicate, Ordering ordering) {
+    return new Stream.fromFuture(_entitiesFor(type).then((entities) {
+      List list = new List.from(entities.values.where((item) =>
+      predicate != null ? predicate.evaluate(item) : true));
+      if (ordering != null)
+        list.sort((object1, object2) => ordering.compare(object1, object2));
+      return list;
+    })).expand((list) => list);
   }
 
   QueryStep selectFrom(Type type) {
     return new QueryStep(type, this);
   }
 
-  Map _entitiesFor(String type) {
-    _entities.putIfAbsent(type, () => new Map());
-    return _entities[type];
+  Future<Map> _entitiesFor(TypeReflection type) {
+    _entities.putIfAbsent(type.name, () => new Map());
+    return new Future.value(_entities[type.name]);
   }
 }
 
@@ -112,20 +120,15 @@ class ExpectationStep<T> {
 
   ExpectationStep(this.type, this.box, [this.predicate, this.ordering]);
 
-  Future<List<T>> list() {
-    return box._load(new TypeReflection(type)).then((list) {
-      if (predicate != null)
-        list = new List.from(list.where((object) => predicate.evaluate(object)));
-      if (ordering != null)
-        list.sort((object1, object2) => ordering.compare(object1, object2));
-      return list;
-    });
+  Stream<T> list() {
+    return box._query(new TypeReflection(type), predicate, ordering);
   }
 
   Predicate<T> createPredicate() => predicate;
 
   Future<Optional<T>> unique() {
-    return list().then((list) => new Optional.ofIterable(list));
+    return list().first.then((item) => new Optional.of(item))
+        .catchError((e) => empty, test: (e) => e is StateError);
   }
 }
 
