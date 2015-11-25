@@ -1,8 +1,10 @@
 name: box
 author: Stijn Van Bael <stijn.van.bael@appify.be>
 homepage: https://github.com/stijnvanbael/box
-version: 0.0.10
+version: 0.0.11
 description: A fluent Dart persistence API inspired by SQL
+environment:
+  sdk: ">=1.13.0"
 dependencies:
   io: ">=0.1.0-git <0.2.0-git"
   exportable: ">=0.1.0 <0.2.0"
