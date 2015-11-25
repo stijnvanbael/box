@@ -36,7 +36,7 @@ class Box {
     return new Future(() => new List.from(_entitiesFor(type.name).values));
   }
 
-  QueryStep query(Type type) {
+  QueryStep selectFrom(Type type) {
     return new QueryStep(type, this);
   }
 

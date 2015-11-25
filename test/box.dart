@@ -48,7 +48,7 @@ main() {
       box.store(dsnow);
       box.store(koneil);
 
-      expect((await box.query(User)
+      expect((await box.selectFrom(User)
       .where('name').equals('Cora Stone')
       .unique()).get(),
       equals(cstone));
@@ -66,7 +66,7 @@ main() {
       box.store(dsnow);
       box.store(koneil);
 
-      expect(await box.query(User)
+      expect(await box.selectFrom(User)
       .where('name').like('C%')
       .orderBy('name').ascending()
       .list(),
@@ -85,7 +85,7 @@ main() {
       box.store(dsnow);
       box.store(koneil);
 
-      expect(await box.query(User)
+      expect(await box.selectFrom(User)
       .where('name').not().equals('Donovan Snow')
       .orderBy('name').descending()
       .list(),
