@@ -8,9 +8,9 @@ class Box {
   Map<String, Map> _entities = {
   };
 
-  store(Object entity) {
+  Future store(Object entity) {
     TypeReflection type = new TypeReflection.fromInstance(entity);
-    _entitiesFor(type).then((entities) {
+    return _entitiesFor(type).then((entities) {
       entities[keyOf(entity)] = entity;
     });
   }
