@@ -7,6 +7,10 @@ import 'package:reflective/reflective.dart';
 import 'package:test/test.dart';
 
 main() {
+  var john = new User(handle: 'jdoe', name: 'John Doe');
+  var margaret = new User(handle: 'mdoe', name: 'Margaret Doe');
+  var emma = new User(handle: 'edoe', name: 'Emma Doe');
+
   group('In-memory', () {
     Box box;
 
@@ -17,14 +21,14 @@ main() {
     test('Store and retrieve simple entity by a single key', () async {
       expect(await box.find(User, 'jdoe'), isNull);
 
-      User user = new User(handle: 'jdoe', name: 'John Doe');
+      User user = john;
       box.store(user);
 
       expect(await box.find(User, 'jdoe'), equals(user));
     });
 
     test('Store and retrieve simple entity by a composite key', () async {
-      User user = new User(handle: 'jdoe', name: 'John Doe');
+      User user = john;
       DateTime timestamp = DateTime.parse('2014-12-11T10:09:08Z');
       expect(await box.find(Post, [user, timestamp]), isNull);
 
@@ -38,7 +42,7 @@ main() {
     });
 
     test('Equals predicate, unique', () async {
-      User jdoe = new User(handle: 'jdoe', name: 'John Doe');
+      User jdoe = john;
       User crollis = new User(handle: 'crollis', name: 'Christine Rollis');
       User cstone = new User(handle: 'cstone', name: 'Cora Stone');
       User dsnow = new User(handle: 'dsnow', name: 'Donovan Snow');
@@ -56,7 +60,7 @@ main() {
     });
 
     test('Like predicate, list, order by', () async {
-      User jdoe = new User(handle: 'jdoe', name: 'John Doe');
+      User jdoe = john;
       User crollis = new User(handle: 'crollis', name: 'Christine Rollis');
       User cstone = new User(handle: 'cstone', name: 'Cora Stone');
       User dsnow = new User(handle: 'dsnow', name: 'Donovan Snow');
@@ -75,7 +79,7 @@ main() {
     });
 
     test('not, descending', () async {
-      User jdoe = new User(handle: 'jdoe', name: 'John Doe');
+      User jdoe = john;
       User crollis = new User(handle: 'crollis', name: 'Christine Rollis');
       User cstone = new User(handle: 'cstone', name: 'Cora Stone');
       User dsnow = new User(handle: 'dsnow', name: 'Donovan Snow');
@@ -105,7 +109,7 @@ main() {
       box = new Box.file('.box/test');
       expect(await box.find(User, 'jdoe'), isNull);
 
-      User user = new User(handle: 'jdoe', name: 'John Doe');
+      User user = john;
       User found = await box.store(user).then((result) async {
         box = new Box.file('.box/test');
         return await box.find(User, 'jdoe');
@@ -119,7 +123,7 @@ main() {
         file.deleteSync();
       }
       box = new Box.file('.box/test');
-      User user = new User(handle: 'jdoe', name: 'John Doe');
+      User user = john;
       DateTime timestamp = DateTime.parse('2014-12-11T10:09:08Z');
       expect(await box.find(Post, [user, timestamp]), isNull);
 
@@ -132,6 +136,26 @@ main() {
         return await box.find(Post, [user, timestamp]);
       });
       expect(found, equals(post));
+    });
+
+    test('Store multiple entities and query', () async {
+      File file = new File('.box/test/box.test.User');
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+      box = new Box.file('.box/test');
+
+      await box.store(john)
+          .then((v) => box.store(margaret))
+          .then((v) => box.store(emma));
+
+      box = new Box.file('.box/test');
+      List<User> users = await box.selectFrom(User).where('name').like('%Doe').list().toList();
+      expect(users, [
+        john,
+        margaret,
+        emma
+      ]);
     });
   });
 }

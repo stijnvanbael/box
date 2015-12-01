@@ -8,30 +8,25 @@ class FileBox extends Box {
     Converters.add(new BoxJsonToObject());
   }
 
-  store(Object entity) {
+  Future store(Object entity) {
     super.store(entity);
     return new Future(() =>
         _persist(new TypeReflection.fromInstance(entity)));
   }
 
-  _persist(TypeReflection type) {
-    File file = _fileOf(type.name);
-    if (file.existsSync()) {
-      file.deleteSync();
-    }
-    return file.create(recursive: true).then((file) {
-      return _entitiesFor(type).then((entities) {
-        file.writeAsString('[\n').then((file) {
-          return new Stream.fromIterable(entities.values)
-              .map((value) => Conversion.convert(value).to(BoxJson).toString())
-              .join("\n")
-              .then((json) {
-            return file.writeAsString(json.toString(), mode: FileMode.APPEND)
-                .then((file) =>
-                file.writeAsString('\n]', mode: FileMode.APPEND));
-          });
-        });
-      });
+  Future _persist(TypeReflection type) {
+    return _entitiesFor(type).then((entities) {
+      File file = _fileOf(type.name);
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+      return file.create(recursive: true)
+          .then((file) => file.writeAsString('[\n'))
+          .then((file) => new Stream.fromIterable(entities.values)
+            .map((value) => Conversion.convert(value).to(BoxJson).toString())
+            .join("\n"))
+          .then((json) => file.writeAsString(json.toString(), mode: FileMode.APPEND))
+          .then((file) => file.writeAsString('\n]', mode: FileMode.APPEND));
     });
   }
 
@@ -62,7 +57,7 @@ class FileBox extends Box {
             return Conversion.convert(new BoxJson(line)).to(reflection.type);
           return null;
         })
-        .where((item) => item != null);
+            .where((item) => item != null);
       }
       return new Stream.fromIterable([]);
     })).asyncExpand((Stream stream) => stream);
