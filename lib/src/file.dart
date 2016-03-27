@@ -54,7 +54,7 @@ class FileBox extends Box {
             .transform(const LineSplitter())
             .map((line) {
           if (line.startsWith("{"))
-            return Conversion.convert(new BoxJson(line)).to(reflection.type);
+            return Conversion.convert(new BoxJson(line)).to(reflection.rawType);
           return null;
         })
             .where((item) => item != null);

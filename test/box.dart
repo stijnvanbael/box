@@ -102,7 +102,7 @@ main() {
     Box box;
 
     test('Store and retrieve simple entity by a single key', () async {
-      File file = new File('.box/test/box.test.User');
+      File file = new File('.box/test/User');
       if (file.existsSync()) {
         file.deleteSync();
       }
@@ -118,7 +118,7 @@ main() {
     });
 
     test('Store and retrieve simple entity by a composite key', () async {
-      File file = new File('.box/test/box.test.Post');
+      File file = new File('.box/test/Post');
       if (file.existsSync()) {
         file.deleteSync();
       }
