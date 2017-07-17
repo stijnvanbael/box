@@ -1,8 +1,6 @@
 Dart Box
 ========
 
-[![Build Status](https://drone.io/github.com/stijnvanbael/box/status.png)](https://drone.io/github.com/stijnvanbael/box/latest)
-
 A fluent Dart persistence API inspired by SQL.
 This library is still in an early phase of development.
 Currently Box has two implementations.
