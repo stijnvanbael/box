@@ -1,223 +1,54 @@
-part of box;
+import 'package:collection/collection.dart';
+import 'package:reflective/reflective.dart';
 
-class Box {
-  Box();
-
-  factory Box.file(String filename) => new FileBox(filename);
-
-  Map<String, Map> _entities = {};
-
-  Future store(Object entity) {
-    TypeReflection type = new TypeReflection.fromInstance(entity);
-    return _entitiesFor(type).then((entities) {
-      entities[keyOf(entity)] = entity;
-    });
-  }
+abstract class Box {
+  Future store(Object entity);
 
   static keyOf(Object entity) {
-    TypeReflection type = new TypeReflection.fromInstance(entity);
+    TypeReflection type = TypeReflection.fromInstance(entity);
     Iterable key =
         type.fieldsWith(Key).values.map((field) => field.value(entity));
-    if (key.isEmpty) throw new Exception('No fields found with @key in $type');
-    return key.length == 1 ? key.first : new Composite(key);
+    if (key.isEmpty) throw Exception('No fields found with @key in $type');
+    return key.length == 1 ? key.first : Composite(key);
   }
 
-  Future find(Type type, key) async {
-    return _entitiesFor(new TypeReflection(type)).then((entitiesForType) {
-      return entitiesForType != null
-          ? entitiesForType[key is Iterable ? new Composite(key) : key]
-          : null;
-    });
-  }
+  Future<T> find<T>(key);
 
-  Stream<T> _query<T>(
-      TypeReflection<T> type, Predicate predicate, Ordering ordering) {
-    return new Stream.fromFuture(_entitiesFor(type).then((entities) {
-      List<T> list = new List.from(entities.values.where(
-          (item) => predicate != null ? predicate.evaluate(item) : true));
-      if (ordering != null)
-        list.sort((object1, object2) => ordering.compare(object1, object2));
-      return list;
-    })).expand((list) => list);
-  }
-
-  QueryStep<T> selectFrom<T>() {
-    return new QueryStep<T>(this);
-  }
-
-  Future<Map> _entitiesFor(TypeReflection type) {
-    _entities.putIfAbsent(type.name, () => new Map());
-    return new Future.value(_entities[type.name]);
-  }
+  QueryStep<T> selectFrom<T>();
 }
 
-class QueryStep<T> extends ExpectationStep<T> {
-  QueryStep(Box box) : super(box);
+abstract class QueryStep<T> extends ExpectationStep<T> {
+  WhereStep<T> where(String field);
 
-  QueryStep.withPredicate(QueryStep<T> query, Predicate<T> predicate)
-      : super(query.box, predicate);
-
-  Type get type => T;
-
-  WhereStep<T> where(String field) => new WhereStep(field, this);
-
-  OrderByStep<T> orderBy(String field) => new OrderByStep(field, this);
+  OrderByStep<T> orderBy(String field);
 }
 
-class NotQueryStep<T> extends QueryStep<T> {
-  QueryStep<T> query;
+abstract class WhereStep<T> {
+  WhereStep<T> not();
 
-  NotQueryStep(QueryStep<T> query) : super(query.box) {
-    this.query = query;
-  }
+  QueryStep<T> like(String expression);
 
-  Predicate<T> createPredicate() => new NotPredicate(query.predicate);
+  QueryStep<T> equals(String expression);
 }
 
-class WhereStep<T> {
-  String field;
-  QueryStep<T> query;
-  bool _not = false;
+abstract class OrderByStep<T> {
+  ExpectationStep<T> ascending();
 
-  WhereStep(this.field, this.query);
-
-  WhereStep<T> not() {
-    _not = true;
-    return this;
-  }
-
-  QueryStep<T> like(String expression) => _wrap(new QueryStep.withPredicate(
-      query, new LikePredicate(query.type, field, expression)));
-
-  QueryStep<T> equals(String expression) => _wrap(new QueryStep.withPredicate(
-      query, new EqualsPredicate(query.type, field, expression)));
-
-  QueryStep<T> _wrap(QueryStep<T> query) =>
-      _not ? new NotQueryStep(query) : query;
+  ExpectationStep<T> descending();
 }
 
-class OrderByStep<T> {
-  QueryStep<T> query;
-  String field;
+abstract class ExpectationStep<T> {
+  Stream<T> stream();
 
-  OrderByStep(this.field, this.query);
+  Future<List<T>> list() async => stream().toList();
 
-  ExpectationStep<T> ascending() => new ExpectationStep(
-      query.box, query.createPredicate(), new Ascending(query.type, field));
+  Predicate<T> createPredicate();
 
-  ExpectationStep<T> descending() => new ExpectationStep(
-      query.box, query.createPredicate(), new Descending(query.type, field));
-}
-
-class ExpectationStep<T> {
-  Box box;
-  Predicate<T> predicate;
-  Ordering<T> ordering;
-
-  ExpectationStep(this.box, [this.predicate, this.ordering]);
-
-  Stream<T> list() {
-    return box._query(new TypeReflection<T>(), predicate, ordering);
-  }
-
-  Predicate<T> createPredicate() => predicate;
-
-  Future<Optional<T>> unique() {
-    return list()
-        .first
-        .then((item) => new Optional.of(item))
-        .catchError((e) => empty, test: (e) => e is StateError);
-  }
-}
-
-class Ascending<T> extends Ordering<T> {
-  Ascending(Type type, String field) : super(type, field);
-
-  int compare(T object1, T object2) {
-    var value1 = valueOf(object1);
-    var value2 = valueOf(object2);
-    return value1.toString().compareTo(value2);
-  }
-}
-
-class Descending<T> extends Ordering<T> {
-  Descending(Type type, String field) : super(type, field);
-
-  int compare(T object1, T object2) {
-    var value1 = valueOf(object1);
-    var value2 = valueOf(object2);
-    return -value1.toString().compareTo(value2);
-  }
-}
-
-abstract class Ordering<T> {
-  final Type type;
-  final String field;
-  FieldReflection fieldReflection;
-
-  Ordering(this.type, this.field) {
-    TypeReflection typeReflection = new TypeReflection(type);
-    this.fieldReflection = typeReflection.field(field);
-    if (fieldReflection == null) {
-      throw new Exception('Field not found: $typeReflection.' + field);
-    }
-  }
-
-  int compare(T object1, T object2);
-
-  valueOf(T object) {
-    return fieldReflection.value(object);
-  }
-}
-
-class LikePredicate<T> extends ExpressionPredicate<T, RegExp> {
-  LikePredicate(Type type, String field, String expression)
-      : super(type, field,
-            new RegExp(expression.replaceAll(new RegExp(r'%'), '.*')));
-
-  bool evaluate(T object) {
-    var value = valueOf(object);
-    return value != null && expression.hasMatch(value.toString());
-  }
-}
-
-class EqualsPredicate<T> extends ExpressionPredicate<T, String> {
-  EqualsPredicate(Type type, String field, String expression)
-      : super(type, field, expression);
-
-  bool evaluate(T object) {
-    var value = valueOf(object);
-    return value != null && expression == value.toString();
-  }
-}
-
-abstract class ExpressionPredicate<T, E> extends Predicate<T> {
-  Type type;
-  String field;
-  E expression;
-
-  ExpressionPredicate(this.type, this.field, this.expression);
-
-  valueOf(T object) {
-    TypeReflection typeReflection = new TypeReflection(type);
-    FieldReflection fieldReflection = typeReflection.field(field);
-    if (fieldReflection == null) {
-      throw new Exception('Field not found: $typeReflection.' + field);
-    }
-    return fieldReflection.value(object);
-  }
+  Future<Optional<T>> unique();
 }
 
 abstract class Predicate<T> {
   bool evaluate(T object);
-}
-
-class NotPredicate<T> extends Predicate<T> {
-  Predicate<T> delegate;
-
-  NotPredicate(this.delegate);
-
-  bool evaluate(T object) => !delegate.evaluate(object);
 }
 
 class Composite {
@@ -233,7 +64,7 @@ class Composite {
     if (other == null || !(other is Composite)) {
       return false;
     }
-    return new IterableEquality().equals(components, other.components);
+    return IterableEquality().equals(components, other.components);
   }
 }
 
