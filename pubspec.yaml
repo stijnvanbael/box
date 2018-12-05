@@ -4,7 +4,7 @@ homepage: https://github.com/stijnvanbael/box
 version: 0.1.0
 description: A fluent Dart persistence API inspired by SQL
 environment:
-  sdk: ^2.1.0
+  sdk: ">=2.0.0 <3.0.0"
 dependencies:
   io: ^0.3.3
   collection: ^1.14.11
