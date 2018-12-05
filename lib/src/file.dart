@@ -25,8 +25,8 @@ class FileBox extends Box {
           .then((file) => new Stream.fromIterable(entities.values)
             .map((value) => Conversion.convert(value).to(BoxJson).toString())
             .join("\n"))
-          .then((json) => file.writeAsString(json.toString(), mode: FileMode.APPEND))
-          .then((file) => file.writeAsString('\n]', mode: FileMode.APPEND));
+          .then((json) => file.writeAsString(json.toString(), mode: FileMode.append))
+          .then((file) => file.writeAsString('\n]', mode: FileMode.append));
     });
   }
 
@@ -50,7 +50,7 @@ class FileBox extends Box {
     return new Stream.fromFuture(file.exists().then((exists) {
       if (exists) {
         return file.openRead()
-            .transform(UTF8.decoder)
+            .transform(utf8.decoder)
             .transform(const LineSplitter())
             .map((line) {
           if (line.startsWith("{"))
@@ -83,7 +83,7 @@ class ObjectToBoxJson extends ConverterBase<Object, BoxJson> {
 
   BoxJson convertTo(Object object, TypeReflection targetReflection) {
     var simplified = _convert(object);
-    return new BoxJson(JSON.encode(simplified));
+    return new BoxJson(jsonEncode(simplified));
   }
 
   _convert(object) {
@@ -119,15 +119,15 @@ class BoxJsonToObject extends ConverterBase<BoxJson, Object> {
       : super(new TypeReflection(BoxJson), new TypeReflection(Object));
 
   Object convertTo(BoxJson json, TypeReflection targetReflection) {
-    var decoded = JSON.decode(json.toString());
+    var decoded = jsonDecode(json.toString());
     return _convert(decoded, targetReflection);
   }
 
   _convert(object, TypeReflection targetReflection) {
     if (object is Map) {
       if (targetReflection.sameOrSuper(Map)) {
-        TypeReflection keyType = targetReflection.arguments[0];
-        TypeReflection valueType = targetReflection.arguments[1];
+        TypeReflection keyType = targetReflection.typeArguments[0];
+        TypeReflection valueType = targetReflection.typeArguments[1];
         Map map = {
         };
         object.keys.forEach((k) {
@@ -149,7 +149,7 @@ class BoxJsonToObject extends ConverterBase<BoxJson, Object> {
         return instance;
       }
     } else if (object is Iterable) {
-      TypeReflection itemType = targetReflection.arguments[0];
+      TypeReflection itemType = targetReflection.typeArguments[0];
       return new List.from(object.map((i) => _convert(i, itemType)));
     } else if (targetReflection.sameOrSuper(DateTime)) {
       return DateTime.parse(object);

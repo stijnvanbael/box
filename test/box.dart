@@ -53,9 +53,13 @@ main() {
       box.store(dsnow);
       box.store(koneil);
 
-      expect((await box.selectFrom(User)
-          .where('name').equals('Cora Stone')
-          .unique()).get(),
+      expect(
+          (await box
+                  .selectFrom<User>()
+                  .where('name')
+                  .equals('Cora Stone')
+                  .unique())
+              .get(),
           equals(cstone));
     });
 
@@ -71,10 +75,15 @@ main() {
       box.store(dsnow);
       box.store(koneil);
 
-      expect(await box.selectFrom(User)
-          .where('name').like('C%')
-          .orderBy('name').ascending()
-          .list().toList(),
+      expect(
+          await box
+              .selectFrom<User>()
+              .where('name')
+              .like('C%')
+              .orderBy('name')
+              .ascending()
+              .list()
+              .toList(),
           equals([crollis, cstone]));
     });
 
@@ -90,10 +99,16 @@ main() {
       box.store(dsnow);
       box.store(koneil);
 
-      expect(await box.selectFrom(User)
-          .where('name').not().equals('Donovan Snow')
-          .orderBy('name').descending()
-          .list().toList(),
+      expect(
+          await box
+              .selectFrom<User>()
+              .where('name')
+              .not()
+              .equals('Donovan Snow')
+              .orderBy('name')
+              .descending()
+              .list()
+              .toList(),
           equals([koneil, jdoe, cstone, crollis]));
     });
   });
@@ -130,7 +145,7 @@ main() {
       Post post = new Post(
           user: user,
           timestamp: timestamp,
-          text: 'I just discovered dart-box, it\'s awesome!');
+          text: 'I just discovered dart-box\nIt\'s awesome!');
       Post found = await box.store(post).then((result) async {
         box = new Box.file('.box/test');
         return await box.find(Post, [user, timestamp]);
@@ -145,17 +160,19 @@ main() {
       }
       box = new Box.file('.box/test');
 
-      await box.store(john)
+      await box
+          .store(john)
           .then((v) => box.store(margaret))
           .then((v) => box.store(emma));
 
       box = new Box.file('.box/test');
-      List<User> users = await box.selectFrom(User).where('name').like('%Doe').list().toList();
-      expect(users, [
-        john,
-        margaret,
-        emma
-      ]);
+      List<User> users = await box
+          .selectFrom<User>()
+          .where('name')
+          .like('%Doe')
+          .list()
+          .toList();
+      expect(users, [john, margaret, emma]);
     });
   });
 }
@@ -192,7 +209,8 @@ class Post {
   bool operator ==(other) {
     if (other is! Post) return false;
     Post post = other;
-    return (post.user == user && post.timestamp == timestamp &&
+    return (post.user == user &&
+        post.timestamp == timestamp &&
         post.text == text);
   }
 }
