@@ -12,9 +12,9 @@ Support for various SQL and NoSQL databases is on the roadmap.
 
 Example:
 
-    Box box = new Box.file('.box/test');
-    Stream<User> users = box.selectFrom(User)
-                                     .where('name').like('C%')
-                                     .orderBy('name').ascending()
-                                     .list();
-    users.listen((user) => print(user.name)));
+    Box box = new FileBox('.box/test');
+    List<User> users = await box.selectFrom<User>()
+                                .where('name').like('C%')
+                                .orderBy('name').ascending()
+                                .list();
+    users.forEach((user) => print(user.name)));
