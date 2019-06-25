@@ -56,6 +56,7 @@ class FileBox extends MemoryBox {
       if (exists) {
         return file
             .openRead()
+            .cast<List<int>>()
             .transform(utf8.decoder)
             .transform(const LineSplitter())
             .map((line) {
