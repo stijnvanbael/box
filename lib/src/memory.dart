@@ -15,19 +15,14 @@ class MemoryBox extends Box {
   @override
   Future<T> find<T>(key) async {
     return entitiesFor(TypeReflection<T>()).then((entitiesForType) {
-      return entitiesForType != null
-          ? entitiesForType[key is Iterable ? Composite(key) : key]
-          : null;
+      return entitiesForType != null ? entitiesForType[key is Map ? Composite(key) : key] : null;
     });
   }
 
-  Stream<T> _query<T>(
-      TypeReflection<T> type, Predicate predicate, _Ordering ordering) {
+  Stream<T> _query<T>(TypeReflection<T> type, Predicate predicate, _Ordering ordering) {
     return Stream.fromFuture(entitiesFor(type).then((entities) {
-      List<T> list = List.from(entities.values.where(
-          (item) => predicate != null ? predicate.evaluate(item) : true));
-      if (ordering != null)
-        list.sort((object1, object2) => ordering.compare(object1, object2));
+      List<T> list = List.from(entities.values.where((item) => predicate != null ? predicate.evaluate(item) : true));
+      if (ordering != null) list.sort((object1, object2) => ordering.compare(object1, object2));
       return list;
     })).expand((list) => list);
   }
@@ -41,13 +36,17 @@ class MemoryBox extends Box {
     entities.putIfAbsent(type.name, () => Map());
     return Future.value(entities[type.name]);
   }
+
+  @override
+  Future deleteAll<T>() async {
+    return (await entitiesFor(TypeReflection<T>())).clear();
+  }
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
   _QueryStep(Box box) : super(box);
 
-  _QueryStep.withPredicate(_QueryStep<T> query, Predicate<T> predicate)
-      : super(query.box, predicate);
+  _QueryStep.withPredicate(_QueryStep<T> query, Predicate<T> predicate) : super(query.box, predicate);
 
   Type get type => T;
 
@@ -56,16 +55,26 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
 
   @override
   OrderByStep<T> orderBy(String field) => _OrderByStep(field, this);
+
+  @override
+  WhereStep<T> and(String field) => _AndStep(field, this);
+
+  @override
+  WhereStep<T> or(String field) => _OrStep(field, this);
 }
 
-class _NotQueryStep<T> extends _QueryStep<T> {
-  _QueryStep<T> query;
+class _OrStep<T> extends _WhereStep<T> {
+  _OrStep(String field, _QueryStep<T> query) : super(field, query);
 
-  _NotQueryStep(_QueryStep<T> query) : super(query.box) {
-    this.query = query;
-  }
+  @override
+  Predicate<T> combine(Predicate<T> predicate) => query.predicate != null ? query.predicate.or(predicate) : predicate;
+}
 
-  Predicate<T> createPredicate() => _NotPredicate(query.predicate);
+class _AndStep<T> extends _WhereStep<T> {
+  _AndStep(String field, _QueryStep<T> query) : super(field, query);
+
+  @override
+  Predicate<T> combine(Predicate<T> predicate) => query.predicate != null ? query.predicate.and(predicate) : predicate;
 }
 
 class _ExpectationStep<T> extends ExpectationStep<T> {
@@ -81,40 +90,36 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
   }
 
   @override
-  Predicate<T> createPredicate() => predicate;
-
-  @override
-  Future<Optional<T>> unique() {
-    return stream()
-        .first
-        .then((item) => Optional.of(item))
-        .catchError((e) => empty, test: (e) => e is StateError);
+  Future<T> unique() {
+    return stream().first;
   }
 }
 
 class _WhereStep<T> implements WhereStep<T> {
   final String field;
   final _QueryStep<T> query;
-  bool _not = false;
 
   _WhereStep(this.field, this.query);
 
   @override
-  WhereStep<T> not() {
-    _not = true;
-    return this;
-  }
+  WhereStep<T> not() => _NotStep<T>(this);
 
   @override
-  QueryStep<T> like(String expression) => _wrap(_QueryStep.withPredicate(
-      query, _LikePredicate(query.type, field, expression)));
+  QueryStep<T> like(String expression) =>
+      _QueryStep.withPredicate(query, combine(_LikePredicate(query.type, field, expression)));
 
   @override
-  QueryStep<T> equals(String expression) => _wrap(_QueryStep.withPredicate(
-      query, _EqualsPredicate(query.type, field, expression)));
+  QueryStep<T> equals(dynamic value) =>
+      _QueryStep.withPredicate(query, combine(_EqualsPredicate(query.type, field, value)));
 
-  QueryStep<T> _wrap(_QueryStep<T> query) =>
-      _not ? _NotQueryStep(query) : query;
+  Predicate<T> combine(Predicate<T> predicate) => predicate;
+}
+
+class _NotStep<T> extends _WhereStep<T> {
+  _NotStep(_WhereStep<T> whereStep) : super(whereStep.field, whereStep.query);
+
+  @override
+  Predicate<T> combine(Predicate<T> predicate) => predicate.not();
 }
 
 class _OrderByStep<T> implements OrderByStep<T> {
@@ -124,12 +129,10 @@ class _OrderByStep<T> implements OrderByStep<T> {
   _OrderByStep(this.field, this.query);
 
   @override
-  ExpectationStep<T> ascending() => _ExpectationStep(
-      query.box, query.createPredicate(), _Ascending(query.type, field));
+  ExpectationStep<T> ascending() => _ExpectationStep(query.box, query.predicate, _Ascending(query.type, field));
 
   @override
-  ExpectationStep<T> descending() => _ExpectationStep(
-      query.box, query.createPredicate(), _Descending(query.type, field));
+  ExpectationStep<T> descending() => _ExpectationStep(query.box, query.predicate, _Descending(query.type, field));
 }
 
 class _Ascending<T> extends _Ordering<T> {
@@ -186,8 +189,7 @@ class _LikePredicate<T> extends _ExpressionPredicate<T, RegExp> {
 }
 
 class _EqualsPredicate<T> extends _ExpressionPredicate<T, String> {
-  _EqualsPredicate(Type type, String field, String expression)
-      : super(type, field, expression);
+  _EqualsPredicate(Type type, String field, String expression) : super(type, field, expression);
 
   @override
   bool evaluate(T object) {
@@ -211,13 +213,4 @@ abstract class _ExpressionPredicate<T, E> extends Predicate<T> {
     }
     return fieldReflection.value(object);
   }
-}
-
-class _NotPredicate<T> extends Predicate<T> {
-  Predicate<T> delegate;
-
-  _NotPredicate(this.delegate);
-
-  @override
-  bool evaluate(T object) => !delegate.evaluate(object);
 }

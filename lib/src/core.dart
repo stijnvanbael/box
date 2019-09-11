@@ -5,22 +5,28 @@ abstract class Box {
   Future store(Object entity);
 
   static keyOf(Object entity) {
-    TypeReflection type = TypeReflection.fromInstance(entity);
-    Iterable key =
-        type.fieldsWith(Key).values.map((field) => field.value(entity));
+    var type = TypeReflection.fromInstance(entity);
+    var key = <String, dynamic>{};
+    type.fieldsWith(Key).values.forEach((field) => key[field.name] = field.value(entity));
     if (key.isEmpty) throw Exception('No fields found with @key in $type');
-    return key.length == 1 ? key.first : Composite(key);
+    return key.length == 1 ? key.values.first : Composite(key);
   }
 
   Future<T> find<T>(key);
 
   QueryStep<T> selectFrom<T>();
+
+  Future deleteAll<T>();
 }
 
 abstract class QueryStep<T> extends ExpectationStep<T> {
   WhereStep<T> where(String field);
 
   OrderByStep<T> orderBy(String field);
+
+  WhereStep<T> and(String field);
+
+  WhereStep<T> or(String field);
 }
 
 abstract class WhereStep<T> {
@@ -28,7 +34,7 @@ abstract class WhereStep<T> {
 
   QueryStep<T> like(String expression);
 
-  QueryStep<T> equals(String expression);
+  QueryStep<T> equals(dynamic value);
 }
 
 abstract class OrderByStep<T> {
@@ -42,29 +48,60 @@ abstract class ExpectationStep<T> {
 
   Future<List<T>> list() async => stream().toList();
 
-  Predicate<T> createPredicate();
-
-  Future<Optional<T>> unique();
+  Future<T> unique();
 }
 
 abstract class Predicate<T> {
   bool evaluate(T object);
+
+  Predicate<T> not() => NotPredicate(this);
+
+  or(Predicate<T> other) => OrPredicate([this, other]);
+
+  and(Predicate<T> other) => AndPredicate([this, other]);
+}
+
+class AndPredicate<T> extends Predicate<T> {
+  final List<Predicate<T>> _predicates;
+
+  AndPredicate(this._predicates);
+
+  @override
+  bool evaluate(T object) => _predicates.every((predicate) => predicate.evaluate(object));
+}
+
+class OrPredicate<T> extends Predicate<T> {
+  final List<Predicate<T>> _predicates;
+
+  OrPredicate(this._predicates);
+
+  @override
+  bool evaluate(T object) => _predicates.any((predicate) => predicate.evaluate(object));
+}
+
+class NotPredicate<T> extends Predicate<T> {
+  final Predicate<T> _predicate;
+
+  NotPredicate(this._predicate);
+
+  @override
+  bool evaluate(T object) => !_predicate.evaluate(object);
 }
 
 class Composite {
-  Iterable components;
+  Map<String, dynamic> components;
 
   Composite(this.components);
 
-  int get hashCode => components
-      .map((c) => 11 * c.hashCode)
+  int get hashCode => components.entries
+      .map((entry) => 11 * entry.key.hashCode + 19 * entry.value.hashCode)
       .reduce((int c1, int c2) => c1 + 17 * c2);
 
   bool operator ==(other) {
     if (other == null || !(other is Composite)) {
       return false;
     }
-    return IterableEquality().equals(components, other.components);
+    return MapEquality().equals(components, other.components);
   }
 }
 

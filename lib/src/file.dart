@@ -7,6 +7,7 @@ import 'package:reflective/reflective.dart';
 
 class FileBox extends MemoryBox {
   final String _path;
+  bool _persisting = false;
 
   FileBox(this._path) {
     Converters.add(_ObjectToBoxJson());
@@ -18,20 +19,23 @@ class FileBox extends MemoryBox {
     return Future(() => _persist(TypeReflection.fromInstance(entity)));
   }
 
-  Future _persist(TypeReflection type) {
-    return entitiesFor(type).then((entities) {
-      File file = _fileOf(type.name);
-      if (file.existsSync()) {
-        file.deleteSync();
-      }
-      return file
-          .create(recursive: true)
-          .then((file) => Stream.fromIterable(entities.values)
-              .map((value) => Conversion.convert(value).to(_BoxJson).toString())
-              .join("\n"))
-          .then((json) =>
-              file.writeAsString(json.toString(), mode: FileMode.append));
-    });
+  Future _persist(TypeReflection type) async {
+    if(_persisting) {
+      // TODO: stage changes
+      throw 'Already persisting changes. Please use await box.store(...) to make sure only one change is persisted at a time';
+    }
+    _persisting = true;
+    var entities = await entitiesFor(type);
+    var file = _fileOf(type.name);
+    if (file.existsSync()) {
+      await file.delete();
+    }
+    await file.create(recursive: true);
+    var json = await Stream.fromIterable(entities.values)
+        .map((value) => Conversion.convert(value).to(_BoxJson).toString())
+        .join("\n");
+    await file.writeAsString(json.toString(), mode: FileMode.append);
+    _persisting = false;
   }
 
   File _fileOf(String type) {
@@ -54,13 +58,8 @@ class FileBox extends MemoryBox {
     File file = _fileOf(reflection.name);
     return Stream.fromFuture(file.exists().then((exists) {
       if (exists) {
-        return file
-            .openRead()
-            .transform(utf8.decoder)
-            .transform(const LineSplitter())
-            .map((line) {
-          if (line.startsWith("{"))
-            return Conversion.convert(_BoxJson(line)).to(reflection.rawType);
+        return file.openRead().transform(utf8.decoder).transform(const LineSplitter()).map((line) {
+          if (line.startsWith("{")) return Conversion.convert(_BoxJson(line)).to(reflection.rawType);
           return null;
         }).where((item) => item != null);
       }
@@ -79,6 +78,16 @@ class FileBox extends MemoryBox {
     }
     return super.find<T>(key);
   }
+
+  @override
+  Future deleteAll<T>() async {
+    await super.deleteAll();
+    var type = TypeReflection<T>();
+    var file = _fileOf(type.name);
+    if (file.existsSync()) {
+      await file.delete();
+    }
+  }
 }
 
 class _ObjectToBoxJson extends ConverterBase<Object, _BoxJson> {
@@ -92,10 +101,7 @@ class _ObjectToBoxJson extends ConverterBase<Object, _BoxJson> {
   _convert(object) {
     if (object is DateTime) {
       return object.toString();
-    } else if (object == null ||
-        object is String ||
-        object is num ||
-        object is bool) {
+    } else if (object == null || object is String || object is num || object is bool) {
       return object;
     } else if (object is Iterable) {
       return List.from(object.map((item) => _convert(item)));
@@ -131,8 +137,7 @@ class _BoxJsonToObject extends ConverterBase<_BoxJson, Object> {
         TypeReflection valueType = targetReflection.typeArguments[1];
         Map map = {};
         object.keys.forEach((k) {
-          var newKey =
-              keyType.sameOrSuper(k) ? k : keyType.construct(args: [k]);
+          var newKey = keyType.sameOrSuper(k) ? k : keyType.construct(args: [k]);
           map[newKey] = _convert(object[k], valueType);
         });
         return map;
@@ -140,13 +145,9 @@ class _BoxJsonToObject extends ConverterBase<_BoxJson, Object> {
         var instance = targetReflection.construct();
         object.keys.forEach((k) {
           if (targetReflection.fields[k] == null)
-            throw JsonException(
-                'Unknown property: ' + targetReflection.name + '.' + k);
+            throw JsonException('Unknown property: ' + targetReflection.name + '.' + k);
         });
-        Maps.forEach(
-            targetReflection.fields,
-            (name, field) =>
-                field.set(instance, _convert(object[name], field.type)));
+        Maps.forEach(targetReflection.fields, (name, field) => field.set(instance, _convert(object[name], field.type)));
         return instance;
       }
     } else if (object is Iterable) {
