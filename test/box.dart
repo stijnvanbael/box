@@ -1,40 +1,60 @@
 import 'package:box/box.dart';
 import 'package:box/mongodb.dart';
+import 'package:collection/collection.dart';
 import 'package:reflective/reflective.dart';
 import 'package:test/test.dart';
 
 main() {
-  runTests('Memory', MemoryBox());
-  runTests('File', FileBox('.box/test'));
-  runTests('MongoDB', MongoDbBox('localhost', database: 'test'));
+  runTests('Memory', () => MemoryBox());
+  runTests('File', () => FileBox('.box/test'));
+  runTests('MongoDB', () => MongoDbBox('localhost', database: 'test'));
 }
 
-void runTests(String name, Box box) {
+void runTests(String name, Box boxBuilder()) {
+  Future<Box> reconnectIfPersistent(Box box) async {
+    if (box.persistent) {
+      await box.close();
+      return boxBuilder();
+    }
+    return box;
+  }
+
   var john = User(id: 'jdoe', name: 'John Doe');
   group(name, () {
     setUp(() async {
+      var box = boxBuilder();
       await box.deleteAll<User>();
+      await box.deleteAll<Post>();
     });
 
     test('Find by single key', () async {
+      var box = boxBuilder();
       expect(await box.find<User>('jdoe'), isNull);
 
       User user = john;
       await box.store(user);
 
+      box = await reconnectIfPersistent(box);
       expect(await box.find<User>('jdoe'), equals(user));
     });
 
     test('Find by composite key', () async {
+      var box = boxBuilder();
       await box.deleteAll<Post>();
       User user = john;
       DateTime timestamp = DateTime.parse('2014-12-11T10:09:08Z');
       expect(await box.find<Post>({'userId': user.id, 'timestamp': timestamp}), isNull);
 
-      Post post = Post(userId: user.id, timestamp: timestamp, text: 'I just discovered dart-box\nIt\'s awesome!');
+      Post post = Post(
+          userId: user.id,
+          timestamp: timestamp,
+          text: 'I just discovered dart-box\nIt\'s awesome!',
+          keywords: ['persistence', 'dart']);
       await box.store(post);
+
+      box = await reconnectIfPersistent(box);
       Post found = await box.find<Post>({'userId': user.id, 'timestamp': timestamp});
-      //expect(found, equals(post));
+      expect(found, equals(post));
     });
 
     test('Equals predicate, unique', () async {
@@ -43,12 +63,14 @@ void runTests(String name, Box box) {
       User cstone = User(id: 'cstone', name: 'Cora Stone');
       User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var box = boxBuilder();
       await box.store(jdoe);
       await box.store(crollis);
       await box.store(cstone);
       await box.store(dsnow);
       await box.store(koneil);
 
+      box = await reconnectIfPersistent(box);
       expect((await box.selectFrom<User>().where('name').equals('Cora Stone').unique()), equals(cstone));
     });
 
@@ -58,12 +80,14 @@ void runTests(String name, Box box) {
       User cstone = User(id: 'cstone', name: 'Cora Stone');
       User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var box = boxBuilder();
       await box.store(jdoe);
       await box.store(crollis);
       await box.store(cstone);
       await box.store(dsnow);
       await box.store(koneil);
 
+      box = await reconnectIfPersistent(box);
       expect(await box.selectFrom<User>().where('name').like('C%').orderBy('name').ascending().list(),
           equals([crollis, cstone]));
     });
@@ -74,12 +98,14 @@ void runTests(String name, Box box) {
       User cstone = User(id: 'cstone', name: 'Cora Stone');
       User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var box = boxBuilder();
       await box.store(jdoe);
       await box.store(crollis);
       await box.store(cstone);
       await box.store(dsnow);
       await box.store(koneil);
 
+      box = await reconnectIfPersistent(box);
       expect(await box.selectFrom<User>().where('name').like('C%').and('name').like('%Stone').list(), equals([cstone]));
     });
 
@@ -89,12 +115,14 @@ void runTests(String name, Box box) {
       User cstone = User(id: 'cstone', name: 'Cora Stone');
       User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var box = boxBuilder();
       await box.store(jdoe);
       await box.store(crollis);
       await box.store(cstone);
       await box.store(dsnow);
       await box.store(koneil);
 
+      box = await reconnectIfPersistent(box);
       expect(
           await box
               .selectFrom<User>()
@@ -114,15 +142,43 @@ void runTests(String name, Box box) {
       User cstone = User(id: 'cstone', name: 'Cora Stone');
       User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var box = boxBuilder();
       await box.store(jdoe);
       await box.store(crollis);
       await box.store(cstone);
       await box.store(dsnow);
       await box.store(koneil);
 
+      box = await reconnectIfPersistent(box);
       expect(
           await box.selectFrom<User>().where('name').not().equals('Donovan Snow').orderBy('name').descending().list(),
           equals([koneil, jdoe, cstone, crollis]));
+    });
+
+    test('Deep query', () async {
+      User crollis =
+          User(id: 'crollis', name: 'Christine Rollis', lastPost: Post(text: 'Dart 2.6.1 is out!', keywords: ['dart']));
+      User cstone = User(
+          id: 'cstone',
+          name: 'Cora Stone',
+          lastPost: Post(text: 'Cupcakes are ready!', keywords: ['baking', 'cupcakes']));
+      User dsnow = User(
+          id: 'dsnow',
+          name: 'Donovan Snow',
+          lastPost: Post(text: 'I just discovered dart-box\nIt\'s awesome!', keywords: ['persistence', 'dart']));
+      User koneil = User(
+          id: 'koneil',
+          name: 'Kendall Oneil',
+          lastPost: Post(text: 'Has anyone seen my dog?', keywords: ['dog', 'lost']));
+      var box = boxBuilder();
+      await box.store(crollis);
+      await box.store(cstone);
+      await box.store(dsnow);
+      await box.store(koneil);
+
+      box = await reconnectIfPersistent(box);
+      expect(await box.selectFrom<User>().where('lastPost.text').like('%dart%').orderBy('name').ascending().list(),
+          equals([crollis, dsnow]));
     });
   });
 }
@@ -131,8 +187,10 @@ class User {
   @key
   String id;
   String name;
+  Post lastPost;
+  List<Post> posts;
 
-  User({this.id, this.name});
+  User({this.id, this.name, this.lastPost, this.posts});
 
   String toString() => '@' + id + ' (' + name + ')';
 
@@ -151,14 +209,18 @@ class Post {
   @key
   DateTime timestamp;
   String text;
+  List<String> keywords;
 
-  Post({this.userId, this.timestamp, this.text});
+  Post({this.userId, this.timestamp, this.text, this.keywords});
 
   int get hashCode => Objects.hash([userId, timestamp, text]);
 
   bool operator ==(other) {
     if (other is! Post) return false;
     Post post = other;
-    return (post.userId == userId && post.timestamp == timestamp && post.text == text);
+    return (post.userId == userId &&
+        post.timestamp == timestamp &&
+        post.text == text &&
+        ListEquality().equals(post.keywords, keywords));
   }
 }

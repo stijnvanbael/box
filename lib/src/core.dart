@@ -2,6 +2,8 @@ import 'package:collection/collection.dart';
 import 'package:reflective/reflective.dart';
 
 abstract class Box {
+  bool get persistent => true;
+
   Future store(Object entity);
 
   static keyOf(Object entity) {
@@ -17,6 +19,8 @@ abstract class Box {
   QueryStep<T> selectFrom<T>();
 
   Future deleteAll<T>();
+
+  Future close();
 }
 
 abstract class QueryStep<T> extends ExpectationStep<T> {

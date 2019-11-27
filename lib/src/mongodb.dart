@@ -6,7 +6,10 @@ import 'package:mongo_dart/mongo_dart.dart';
 import 'package:reflective/reflective.dart';
 
 class MongoDbBox extends Box {
-  Db _db;
+  final Db _db;
+
+  @override
+  bool get persistent => true;
 
   MongoDbBox(
     String hostname, {
@@ -20,7 +23,14 @@ class MongoDbBox extends Box {
   @override
   Future<T> find<T>(key) async {
     var collection = await _collectionFor(T);
-    var document = await collection.findOne(where.eq('_id', _toId(key)));
+    var document;
+    if (key is Map) {
+      var selector = where;
+      key.forEach((k, v) => selector.eq('_id.$k', _toId(v)));
+      document = await collection.findOne(selector);
+    } else {
+      document = await collection.findOne(where.eq('_id', _toId(key)));
+    }
     return _toEntity<T>(document);
   }
 
@@ -31,7 +41,7 @@ class MongoDbBox extends Box {
   Future store(Object entity) async {
     var document = Conversion.convert(entity).to(Map);
     var collection = await _collectionFor(entity.runtimeType);
-    collection.save(document);
+    await collection.save(document);
   }
 
   Future<DbCollection> _collectionFor(Type type) async {
@@ -52,6 +62,9 @@ class MongoDbBox extends Box {
   _toEntity<T>(Map<String, dynamic> document) {
     return Conversion.convert(document).to(T);
   }
+
+  @override
+  Future close() async => _db.close();
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
@@ -151,7 +164,7 @@ class _WhereStep<T> implements WhereStep<T> {
   QueryStep<T> like(String expression) => _QueryStep<T>.withSelector(
       query,
       combine({
-        field: {r'$regex': expression.replaceAll('%', '.+')}
+        field: {r'$regex': expression.replaceAll('%', '.*'), r'$options': 'i'}
       }));
 
   @override
@@ -233,9 +246,14 @@ class _DocumentToObject extends ConverterBase<Map<String, dynamic>, Object> {
           if (k != '_id' && targetReflection.fields[k] == null)
             throw JsonException('Unknown property: ' + targetReflection.name + '.' + k);
         });
+        var multipleKeys = targetReflection.fields.values.where((field) => field.has(Key)).length > 1;
         Maps.forEach(targetReflection.fields, (name, field) {
           if (field.has(Key)) {
-            field.set(instance, _parseId(object['_id']));
+            if (multipleKeys) {
+              field.set(instance, _parseId(object['_id'][name]));
+            } else {
+              field.set(instance, _parseId(object['_id']));
+            }
           } else {
             field.set(instance, _convert(object[name], field.type));
           }
@@ -243,8 +261,10 @@ class _DocumentToObject extends ConverterBase<Map<String, dynamic>, Object> {
         return instance;
       }
     } else if (object is Iterable) {
-      TypeReflection itemType = targetReflection.typeArguments[0];
-      return List.from(object.map((i) => _convert(i, itemType)));
+      var iterable = targetReflection.construct();
+      var itemType = targetReflection.typeArguments[0];
+      object.forEach((i) => iterable.add(_convert(i, itemType)));
+      return iterable;
     } else {
       return object;
     }

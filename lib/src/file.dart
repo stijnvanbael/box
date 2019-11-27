@@ -9,6 +9,9 @@ class FileBox extends MemoryBox {
   final String _path;
   bool _persisting = false;
 
+  @override
+  bool get persistent => true;
+
   FileBox(this._path) {
     Converters.add(_ObjectToBoxJson());
     Converters.add(_BoxJsonToObject());
@@ -20,7 +23,7 @@ class FileBox extends MemoryBox {
   }
 
   Future _persist(TypeReflection type) async {
-    if(_persisting) {
+    if (_persisting) {
       // TODO: stage changes
       throw 'Already persisting changes. Please use await box.store(...) to make sure only one change is persisted at a time';
     }
@@ -59,7 +62,9 @@ class FileBox extends MemoryBox {
     return Stream.fromFuture(file.exists().then((exists) {
       if (exists) {
         return file.openRead().transform(utf8.decoder).transform(const LineSplitter()).map((line) {
-          if (line.startsWith("{")) return Conversion.convert(_BoxJson(line)).to(reflection.rawType);
+          if (line.startsWith("{")) {
+            return Conversion.convert(_BoxJson(line)).to(reflection.rawType);
+          }
           return null;
         }).where((item) => item != null);
       }
@@ -151,10 +156,12 @@ class _BoxJsonToObject extends ConverterBase<_BoxJson, Object> {
         return instance;
       }
     } else if (object is Iterable) {
-      TypeReflection itemType = targetReflection.typeArguments[0];
-      return List.from(object.map((i) => _convert(i, itemType)));
+      var iterable = targetReflection.construct();
+      var itemType = targetReflection.typeArguments[0];
+      object.forEach((i) => iterable.add(_convert(i, itemType)));
+      return iterable;
     } else if (targetReflection.sameOrSuper(DateTime)) {
-      return DateTime.parse(object);
+      return object != null ? DateTime.parse(object) : null;
     } else {
       return object;
     }

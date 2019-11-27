@@ -5,6 +5,9 @@ class MemoryBox extends Box {
   final Map<String, Map> entities = {};
 
   @override
+  bool get persistent => false;
+
+  @override
   Future store(Object entity) {
     TypeReflection type = TypeReflection.fromInstance(entity);
     return entitiesFor(type).then((entities) {
@@ -41,6 +44,9 @@ class MemoryBox extends Box {
   Future deleteAll<T>() async {
     return (await entitiesFor(TypeReflection<T>())).clear();
   }
+
+  @override
+  Future close() async {}
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
@@ -179,7 +185,7 @@ abstract class _Ordering<T> {
 
 class _LikePredicate<T> extends _ExpressionPredicate<T, RegExp> {
   _LikePredicate(Type type, String field, String expression)
-      : super(type, field, RegExp(expression.replaceAll(RegExp(r'%'), '.*')));
+      : super(type, field, RegExp(expression.replaceAll('%', '.*'), caseSensitive: false));
 
   @override
   bool evaluate(T object) {
@@ -206,11 +212,19 @@ abstract class _ExpressionPredicate<T, E> extends Predicate<T> {
   _ExpressionPredicate(this.type, this.field, this.expression);
 
   valueOf(T object) {
-    TypeReflection typeReflection = TypeReflection(type);
-    FieldReflection fieldReflection = typeReflection.field(field);
-    if (fieldReflection == null) {
-      throw Exception('Field not found: $typeReflection.' + field);
+    var typeReflection = TypeReflection(type);
+    dynamic currentValue = object;
+    for (var subField in field.split('.')) {
+      var fieldReflection = typeReflection.field(subField);
+      if (fieldReflection == null) {
+        throw Exception('Field not found: $typeReflection.$subField');
+      }
+      currentValue = fieldReflection.value(currentValue);
+      if (currentValue == null) {
+        return null;
+      }
+      typeReflection = TypeReflection.fromInstance(currentValue);
     }
-    return fieldReflection.value(object);
+    return currentValue;
   }
 }
