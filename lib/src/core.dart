@@ -6,6 +6,12 @@ abstract class Box {
 
   Future store(Object entity);
 
+  Future storeAll(List<Object> entities) async {
+    for (var entity in entities) {
+      await store(entity);
+    }
+  }
+
   static keyOf(Object entity) {
     var type = TypeReflection.fromInstance(entity);
     var key = <String, dynamic>{};
@@ -39,6 +45,14 @@ abstract class WhereStep<T> {
   QueryStep<T> like(String expression);
 
   QueryStep<T> equals(dynamic value);
+
+  QueryStep<T> gt(dynamic value);
+
+  QueryStep<T> gte(dynamic value);
+
+  QueryStep<T> lt(dynamic value);
+
+  QueryStep<T> lte(dynamic value);
 }
 
 abstract class OrderByStep<T> {

@@ -119,6 +119,22 @@ class _WhereStep<T> implements WhereStep<T> {
       _QueryStep.withPredicate(query, combine(_EqualsPredicate(query.type, field, value)));
 
   Predicate<T> combine(Predicate<T> predicate) => predicate;
+
+  @override
+  QueryStep<T> gt(dynamic value) =>
+      _QueryStep.withPredicate(query, combine(_GreaterThanPredicate(query.type, field, value)));
+
+  @override
+  QueryStep<T> gte(dynamic value) =>
+      _QueryStep.withPredicate(query, combine(_GreaterThanOrEqualsPredicate(query.type, field, value)));
+
+  @override
+  QueryStep<T> lt(dynamic value) =>
+      _QueryStep.withPredicate(query, combine(_LessThanPredicate(query.type, field, value)));
+
+  @override
+  QueryStep<T> lte(dynamic value) =>
+      _QueryStep.withPredicate(query, combine(_LessThanOrEqualsPredicate(query.type, field, value)));
 }
 
 class _NotStep<T> extends _WhereStep<T> {
@@ -202,6 +218,52 @@ class _EqualsPredicate<T> extends _ExpressionPredicate<T, String> {
     var value = valueOf(object);
     return value != null && expression == value.toString();
   }
+}
+
+abstract class _ComparingPredicate<T> extends _ExpressionPredicate<T, dynamic> {
+  _ComparingPredicate(Type type, String field, dynamic expression) : super(type, field, expression);
+
+  @override
+  bool evaluate(T object) {
+    var value = valueOf(object);
+    if (value == null) {
+      return false;
+    } else if (value is Comparable) {
+      return compare(value.compareTo(expression));
+    } else {
+      throw 'Cannot compare "$object" with "$expression". Unsupported type';
+    }
+  }
+
+  bool compare(int value);
+}
+
+class _GreaterThanPredicate<T> extends _ComparingPredicate<T> {
+  _GreaterThanPredicate(Type type, String field, dynamic expression) : super(type, field, expression);
+
+  @override
+  bool compare(int value) => value > 0;
+}
+
+class _GreaterThanOrEqualsPredicate<T> extends _ComparingPredicate<T> {
+  _GreaterThanOrEqualsPredicate(Type type, String field, dynamic expression) : super(type, field, expression);
+
+  @override
+  bool compare(int value) => value >= 0;
+}
+
+class _LessThanPredicate<T> extends _ComparingPredicate<T> {
+  _LessThanPredicate(Type type, String field, dynamic expression) : super(type, field, expression);
+
+  @override
+  bool compare(int value) => value < 0;
+}
+
+class _LessThanOrEqualsPredicate<T> extends _ComparingPredicate<T> {
+  _LessThanOrEqualsPredicate(Type type, String field, dynamic expression) : super(type, field, expression);
+
+  @override
+  bool compare(int value) => value <= 0;
 }
 
 abstract class _ExpressionPredicate<T, E> extends Predicate<T> {

@@ -20,13 +20,14 @@ void runTests(String name, Box boxBuilder()) {
   }
 
   var john = User(id: 'jdoe', name: 'John Doe');
-  group(name, () {
-    setUp(() async {
-      var box = boxBuilder();
-      await box.deleteAll<User>();
-      await box.deleteAll<Post>();
-    });
 
+  setUp(() async {
+    var box = boxBuilder();
+    await box.deleteAll<User>();
+    await box.deleteAll<Post>();
+  });
+
+  group('$name - Find by key', () {
     test('Find by single key', () async {
       var box = boxBuilder();
       expect(await box.find<User>('jdoe'), isNull);
@@ -56,42 +57,94 @@ void runTests(String name, Box boxBuilder()) {
       Post found = await box.find<Post>({'userId': user.id, 'timestamp': timestamp});
       expect(found, equals(post));
     });
+  });
 
-    test('Equals predicate, unique', () async {
+  group('$name - Predicates', () {
+    test('equals predicate, unique', () async {
       User jdoe = john;
       User crollis = User(id: 'crollis', name: 'Christine Rollis');
       User cstone = User(id: 'cstone', name: 'Cora Stone');
       User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       User koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
-      await box.store(jdoe);
-      await box.store(crollis);
-      await box.store(cstone);
-      await box.store(dsnow);
-      await box.store(koneil);
+      await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
       expect((await box.selectFrom<User>().where('name').equals('Cora Stone').unique()), equals(cstone));
     });
 
-    test('Like predicate, list, order by', () async {
+    test('like predicate, list, order by', () async {
       User jdoe = john;
       User crollis = User(id: 'crollis', name: 'Christine Rollis');
       User cstone = User(id: 'cstone', name: 'Cora Stone');
       User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       User koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
-      await box.store(jdoe);
-      await box.store(crollis);
-      await box.store(cstone);
-      await box.store(dsnow);
-      await box.store(koneil);
+      await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
       expect(await box.selectFrom<User>().where('name').like('C%').orderBy('name').ascending().list(),
           equals([crollis, cstone]));
     });
 
+    test('gt predicate', () async {
+      User jdoe = john;
+      User crollis = User(id: 'crollis', name: 'Christine Rollis');
+      User cstone = User(id: 'cstone', name: 'Cora Stone');
+      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var box = boxBuilder();
+      await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
+
+      box = await reconnectIfPersistent(box);
+      expect((await box.selectFrom<User>().where('name').gt('Cora Stone').orderBy('name').ascending().list()),
+          equals([dsnow, jdoe, koneil]));
+    });
+
+    test('gte predicate', () async {
+      User jdoe = john;
+      User crollis = User(id: 'crollis', name: 'Christine Rollis');
+      User cstone = User(id: 'cstone', name: 'Cora Stone');
+      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var box = boxBuilder();
+      await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
+
+      box = await reconnectIfPersistent(box);
+      expect((await box.selectFrom<User>().where('name').gte('Cora Stone').orderBy('name').ascending().list()),
+          equals([cstone, dsnow, jdoe, koneil]));
+    });
+
+    test('lt predicate', () async {
+      User jdoe = john;
+      User crollis = User(id: 'crollis', name: 'Christine Rollis');
+      User cstone = User(id: 'cstone', name: 'Cora Stone');
+      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var box = boxBuilder();
+      await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
+
+      box = await reconnectIfPersistent(box);
+      expect((await box.selectFrom<User>().where('name').lt('Donovan Snow').orderBy('name').ascending().list()),
+          equals([crollis, cstone]));
+    });
+
+    test('gte predicate', () async {
+      User jdoe = john;
+      User crollis = User(id: 'crollis', name: 'Christine Rollis');
+      User cstone = User(id: 'cstone', name: 'Cora Stone');
+      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var box = boxBuilder();
+      await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
+
+      box = await reconnectIfPersistent(box);
+      expect((await box.selectFrom<User>().where('name').lte('Donovan Snow').orderBy('name').ascending().list()),
+          equals([crollis, cstone, dsnow]));
+    });
+  });
+
+  group('$name - Operators', () {
     test('AND', () async {
       User jdoe = john;
       User crollis = User(id: 'crollis', name: 'Christine Rollis');
@@ -99,11 +152,7 @@ void runTests(String name, Box boxBuilder()) {
       User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       User koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
-      await box.store(jdoe);
-      await box.store(crollis);
-      await box.store(cstone);
-      await box.store(dsnow);
-      await box.store(koneil);
+      await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
       expect(await box.selectFrom<User>().where('name').like('C%').and('name').like('%Stone').list(), equals([cstone]));
@@ -116,11 +165,7 @@ void runTests(String name, Box boxBuilder()) {
       User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       User koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
-      await box.store(jdoe);
-      await box.store(crollis);
-      await box.store(cstone);
-      await box.store(dsnow);
-      await box.store(koneil);
+      await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
       expect(
@@ -143,19 +188,17 @@ void runTests(String name, Box boxBuilder()) {
       User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       User koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
-      await box.store(jdoe);
-      await box.store(crollis);
-      await box.store(cstone);
-      await box.store(dsnow);
-      await box.store(koneil);
+      await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
       expect(
           await box.selectFrom<User>().where('name').not().equals('Donovan Snow').orderBy('name').descending().list(),
           equals([koneil, jdoe, cstone, crollis]));
     });
+  });
 
-    test('Deep query', () async {
+  group('$name - Deep queries', () {
+    test('Deep query into value object', () async {
       User crollis =
           User(id: 'crollis', name: 'Christine Rollis', lastPost: Post(text: 'Dart 2.6.1 is out!', keywords: ['dart']));
       User cstone = User(
@@ -171,10 +214,7 @@ void runTests(String name, Box boxBuilder()) {
           name: 'Kendall Oneil',
           lastPost: Post(text: 'Has anyone seen my dog?', keywords: ['dog', 'lost']));
       var box = boxBuilder();
-      await box.store(crollis);
-      await box.store(cstone);
-      await box.store(dsnow);
-      await box.store(koneil);
+      await box.storeAll([crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
       expect(await box.selectFrom<User>().where('lastPost.text').like('%dart%').orderBy('name').ascending().list(),

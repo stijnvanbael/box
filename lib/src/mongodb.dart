@@ -153,24 +153,31 @@ class _WhereStep<T> implements WhereStep<T> {
 
   _WhereStep(this.field, this.query);
 
-  @override
-  QueryStep<T> equals(dynamic value) => _QueryStep<T>.withSelector(
-      query,
-      combine({
-        field: {r'$eq': value}
-      }));
+  Map<String, dynamic> combine(Map<String, dynamic> selector) => selector;
 
-  @override
-  QueryStep<T> like(String expression) => _QueryStep<T>.withSelector(
-      query,
-      combine({
-        field: {r'$regex': expression.replaceAll('%', '.*'), r'$options': 'i'}
-      }));
+  QueryStep<T> _queryStep(Map<String, dynamic> selector) =>
+      _QueryStep<T>.withSelector(query, combine({field: selector}));
 
   @override
   WhereStep<T> not() => _NotStep<T>(this);
 
-  Map<String, dynamic> combine(Map<String, dynamic> selector) => selector;
+  @override
+  QueryStep<T> equals(dynamic value) => _queryStep({r'$eq': value});
+
+  @override
+  QueryStep<T> like(String expression) => _queryStep({r'$regex': expression.replaceAll('%', '.*'), r'$options': 'i'});
+
+  @override
+  QueryStep<T> gt(dynamic value) => _queryStep({r'$gt': value});
+
+  @override
+  QueryStep<T> gte(dynamic value) => _queryStep({r'$gte': value});
+
+  @override
+  QueryStep<T> lt(dynamic value) => _queryStep({r'$lt': value});
+
+  @override
+  QueryStep<T> lte(dynamic value) => _queryStep({r'$lte': value});
 }
 
 class _NotStep<T> extends _WhereStep<T> {
