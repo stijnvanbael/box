@@ -53,6 +53,8 @@ abstract class WhereStep<T> {
   QueryStep<T> lt(dynamic value);
 
   QueryStep<T> lte(dynamic value);
+
+  QueryStep<T> between(dynamic value1, dynamic value2);
 }
 
 abstract class OrderByStep<T> {

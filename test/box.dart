@@ -142,6 +142,20 @@ void runTests(String name, Box boxBuilder()) {
       expect((await box.selectFrom<User>().where('name').lte('Donovan Snow').orderBy('name').ascending().list()),
           equals([crollis, cstone, dsnow]));
     });
+
+    test('between predicate', () async {
+      User jdoe = john;
+      User crollis = User(id: 'crollis', name: 'Christine Rollis');
+      User cstone = User(id: 'cstone', name: 'Cora Stone');
+      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var box = boxBuilder();
+      await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
+
+      box = await reconnectIfPersistent(box);
+      expect((await box.selectFrom<User>().where('name').between('Ci', 'E').orderBy('name').ascending().list()),
+          equals([cstone, dsnow]));
+    });
   });
 
   group('$name - Operators', () {

@@ -135,6 +135,10 @@ class _WhereStep<T> implements WhereStep<T> {
   @override
   QueryStep<T> lte(dynamic value) =>
       _QueryStep.withPredicate(query, combine(_LessThanOrEqualsPredicate(query.type, field, value)));
+
+  @override
+  QueryStep<T> between(dynamic value1, dynamic value2) =>
+      _QueryStep.withPredicate(query, combine(_BetweenPredicate(query.type, field, value1, value2)));
 }
 
 class _NotStep<T> extends _WhereStep<T> {
@@ -264,6 +268,18 @@ class _LessThanOrEqualsPredicate<T> extends _ComparingPredicate<T> {
 
   @override
   bool compare(int value) => value <= 0;
+}
+
+class _BetweenPredicate<T> extends Predicate<T> {
+  final Predicate<T> _lowerBound;
+  final Predicate<T> _upperBound;
+
+  _BetweenPredicate(Type type, String field, dynamic value1, dynamic value2)
+      : _lowerBound = _GreaterThanPredicate(type, field, value1),
+        _upperBound = _LessThanPredicate(type, field, value2);
+
+  @override
+  bool evaluate(T object) => _lowerBound.evaluate(object) && _upperBound.evaluate(object);
 }
 
 abstract class _ExpressionPredicate<T, E> extends Predicate<T> {

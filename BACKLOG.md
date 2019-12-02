@@ -1,6 +1,5 @@
 Backlog
 =======
-* [ ] Between
 * [ ] Limit
 * [ ] Offset
 * [ ] Firebase support
@@ -15,3 +14,4 @@ Done
 * [x] Deep queries
 * [x] Greater than (or equal)
 * [x] Less than (or equal)
+* [x] Between

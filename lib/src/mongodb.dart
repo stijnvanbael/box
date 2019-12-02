@@ -178,6 +178,9 @@ class _WhereStep<T> implements WhereStep<T> {
 
   @override
   QueryStep<T> lte(dynamic value) => _queryStep({r'$lte': value});
+
+  @override
+  QueryStep<T> between(dynamic value1, dynamic value2) => _queryStep({r'$gt': value1, r'$lt': value2});
 }
 
 class _NotStep<T> extends _WhereStep<T> {
