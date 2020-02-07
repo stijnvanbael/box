@@ -64,9 +64,9 @@ abstract class OrderByStep<T> {
 }
 
 abstract class ExpectationStep<T> {
-  Stream<T> stream();
+  Stream<T> stream({int limit, int offset});
 
-  Future<List<T>> list() async => stream().toList();
+  Future<List<T>> list({int limit = 1000000, int offset = 0}) async => stream(limit: limit, offset: offset).toList();
 
   Future<T> unique();
 }

@@ -2,7 +2,7 @@ import 'package:box/core.dart';
 import 'package:box/src/core.dart';
 import 'package:inflection2/inflection2.dart';
 import 'package:meta/meta.dart';
-import 'package:mongo_dart/mongo_dart.dart';
+import 'package:mongo_dart/mongo_dart.dart' show Db, where, DbCollection, State, ObjectId;
 import 'package:reflective/reflective.dart';
 
 class MongoDbBox extends Box {
@@ -44,7 +44,7 @@ class MongoDbBox extends Box {
     await collection.save(document);
   }
 
-  Future<DbCollection> _collectionFor(Type type) async {
+  Future<DbCollection> _collectionFor<T>(Type type) async {
     if (_db.state == State.INIT) {
       await _db.open();
     }
@@ -134,9 +134,13 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
   _ExpectationStep(this._box, this._selector, this._order);
 
   @override
-  Stream<T> stream() async* {
+  Stream<T> stream({int limit = 1000000, int offset = 0}) async* {
     var collection = await _box._collectionFor(T);
-    yield* collection.find({r'$query': _selector, r'$orderby': _order}).map((document) => _box._toEntity<T>(document));
+    yield* collection
+        .find({r'$query': _selector, r'$orderby': _order})
+        .skip(offset) // TODO: find a more efficient way to do this
+        .take(limit)
+        .map((document) => _box._toEntity<T>(document));
   }
 
   @override

@@ -235,6 +235,33 @@ void runTests(String name, Box boxBuilder()) {
           equals([crollis, dsnow]));
     });
   });
+
+  group('$name - Limit and offset', () {
+    test('Limit', () async {
+      User jdoe = john;
+      User crollis = User(id: 'crollis', name: 'Christine Rollis');
+      User cstone = User(id: 'cstone', name: 'Cora Stone');
+      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var box = boxBuilder();
+      await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
+
+      box = await reconnectIfPersistent(box);
+      expect(await box.selectFrom<User>().orderBy('name').ascending().list(limit: 3), equals([crollis, cstone, dsnow]));
+    });
+    test('Offset', () async {
+      User jdoe = john;
+      User crollis = User(id: 'crollis', name: 'Christine Rollis');
+      User cstone = User(id: 'cstone', name: 'Cora Stone');
+      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var box = boxBuilder();
+      await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
+
+      box = await reconnectIfPersistent(box);
+      expect(await box.selectFrom<User>().orderBy('name').ascending().list(offset: 2), equals([dsnow, jdoe, koneil]));
+    });
+  });
 }
 
 class User {

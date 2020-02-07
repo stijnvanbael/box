@@ -91,8 +91,8 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
   _ExpectationStep(this.box, [this.predicate, this.ordering]);
 
   @override
-  Stream<T> stream() {
-    return box._query(TypeReflection<T>(), predicate, ordering);
+  Stream<T> stream({int limit = 1000000, int offset = 0}) {
+    return box._query(TypeReflection<T>(), predicate, ordering).skip(offset).take(limit);
   }
 
   @override
