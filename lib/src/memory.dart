@@ -16,8 +16,8 @@ class MemoryBox extends Box {
   }
 
   @override
-  Future<T> find<T>(key) async {
-    return entitiesFor(TypeReflection<T>()).then((entitiesForType) {
+  Future<T> find<T>(key, [Type type]) async {
+    return entitiesFor(TypeReflection<T>(type)).then((entitiesForType) {
       return entitiesForType != null ? entitiesForType[key is Map ? Composite(key) : key] : null;
     });
   }
@@ -31,8 +31,8 @@ class MemoryBox extends Box {
   }
 
   @override
-  _QueryStep<T> selectFrom<T>() {
-    return _QueryStep<T>(this);
+  _QueryStep<T> selectFrom<T>([Type type]) {
+    return _QueryStep<T>(this, type);
   }
 
   Future<Map> entitiesFor(TypeReflection type) {
@@ -41,8 +41,8 @@ class MemoryBox extends Box {
   }
 
   @override
-  Future deleteAll<T>() async {
-    return (await entitiesFor(TypeReflection<T>())).clear();
+  Future deleteAll<T>([Type type]) async {
+    return (await entitiesFor(TypeReflection<T>(type))).clear();
   }
 
   @override
@@ -50,11 +50,9 @@ class MemoryBox extends Box {
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
-  _QueryStep(Box box) : super(box);
+  _QueryStep(Box box, Type type) : super(box, type);
 
-  _QueryStep.withPredicate(_QueryStep<T> query, Predicate<T> predicate) : super(query.box, predicate);
-
-  Type get type => T;
+  _QueryStep.withPredicate(_QueryStep<T> query, Predicate<T> predicate, Type type) : super(query.box, type, predicate);
 
   @override
   WhereStep<T> where(String field) => _WhereStep(field, this);
@@ -87,18 +85,21 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
   final MemoryBox box;
   final Predicate<T> predicate;
   final _Ordering<T> ordering;
+  final Type _type;
 
-  _ExpectationStep(this.box, [this.predicate, this.ordering]);
+  _ExpectationStep(this.box, [this._type, this.predicate, this.ordering]);
 
   @override
   Stream<T> stream({int limit = 1000000, int offset = 0}) {
-    return box._query(TypeReflection<T>(), predicate, ordering).skip(offset).take(limit);
+    return box._query(TypeReflection<T>(_type), predicate, ordering).skip(offset).take(limit);
   }
 
   @override
   Future<T> unique() {
     return stream().first;
   }
+
+  Type get type => T == dynamic ? _type : T;
 }
 
 class _WhereStep<T> implements WhereStep<T> {
@@ -112,33 +113,33 @@ class _WhereStep<T> implements WhereStep<T> {
 
   @override
   QueryStep<T> like(String expression) =>
-      _QueryStep.withPredicate(query, combine(_LikePredicate(query.type, field, expression)));
+      _QueryStep.withPredicate(query, combine(_LikePredicate(query.type, field, expression)), query._type);
 
   @override
   QueryStep<T> equals(dynamic value) =>
-      _QueryStep.withPredicate(query, combine(_EqualsPredicate(query.type, field, value)));
+      _QueryStep.withPredicate(query, combine(_EqualsPredicate(query.type, field, value)), query._type);
 
   Predicate<T> combine(Predicate<T> predicate) => predicate;
 
   @override
   QueryStep<T> gt(dynamic value) =>
-      _QueryStep.withPredicate(query, combine(_GreaterThanPredicate(query.type, field, value)));
+      _QueryStep.withPredicate(query, combine(_GreaterThanPredicate(query.type, field, value)), query._type);
 
   @override
   QueryStep<T> gte(dynamic value) =>
-      _QueryStep.withPredicate(query, combine(_GreaterThanOrEqualsPredicate(query.type, field, value)));
+      _QueryStep.withPredicate(query, combine(_GreaterThanOrEqualsPredicate(query.type, field, value)), query._type);
 
   @override
   QueryStep<T> lt(dynamic value) =>
-      _QueryStep.withPredicate(query, combine(_LessThanPredicate(query.type, field, value)));
+      _QueryStep.withPredicate(query, combine(_LessThanPredicate(query.type, field, value)), query._type);
 
   @override
   QueryStep<T> lte(dynamic value) =>
-      _QueryStep.withPredicate(query, combine(_LessThanOrEqualsPredicate(query.type, field, value)));
+      _QueryStep.withPredicate(query, combine(_LessThanOrEqualsPredicate(query.type, field, value)), query._type);
 
   @override
   QueryStep<T> between(dynamic value1, dynamic value2) =>
-      _QueryStep.withPredicate(query, combine(_BetweenPredicate(query.type, field, value1, value2)));
+      _QueryStep.withPredicate(query, combine(_BetweenPredicate(query.type, field, value1, value2)), query._type);
 }
 
 class _NotStep<T> extends _WhereStep<T> {
@@ -155,10 +156,12 @@ class _OrderByStep<T> implements OrderByStep<T> {
   _OrderByStep(this.field, this.query);
 
   @override
-  ExpectationStep<T> ascending() => _ExpectationStep(query.box, query.predicate, _Ascending(query.type, field));
+  ExpectationStep<T> ascending() =>
+      _ExpectationStep(query.box, query.type, query.predicate, _Ascending(query.type, field));
 
   @override
-  ExpectationStep<T> descending() => _ExpectationStep(query.box, query.predicate, _Descending(query.type, field));
+  ExpectationStep<T> descending() =>
+      _ExpectationStep(query.box, query.type, query.predicate, _Descending(query.type, field));
 }
 
 class _Ascending<T> extends _Ordering<T> {

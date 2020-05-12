@@ -1,11 +1,11 @@
 Backlog
 =======
-* [ ] Limit
-* [ ] Offset
 * [ ] Firebase support
-* [ ] Postgresql support
+* [ ] PostgreSQL support
 * [ ] Mirrorless reflection
 * [ ] SQLite support
+* [ ] Group by
+* [ ] Join
 
 Done
 ====
@@ -15,3 +15,6 @@ Done
 * [x] Greater than (or equal)
 * [x] Less than (or equal)
 * [x] Between
+* [x] Dynamically typed queries
+* [x] Limit
+* [x] Offset

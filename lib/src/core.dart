@@ -20,11 +20,11 @@ abstract class Box {
     return key.length == 1 ? key.values.first : Composite(key);
   }
 
-  Future<T> find<T>(key);
+  Future<T> find<T>(key, [Type type]);
 
-  QueryStep<T> selectFrom<T>();
+  QueryStep<T> selectFrom<T>([Type type]);
 
-  Future deleteAll<T>();
+  Future deleteAll<T>([Type type]);
 
   Future close();
 }

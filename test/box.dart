@@ -262,6 +262,30 @@ void runTests(String name, Box boxBuilder()) {
       expect(await box.selectFrom<User>().orderBy('name').ascending().list(offset: 2), equals([dsnow, jdoe, koneil]));
     });
   });
+
+  group('$name - Dynamic type parameters', () {
+    test('select', () async {
+      User crollis = User(id: 'crollis', name: 'Christine Rollis');
+      User cstone = User(id: 'cstone', name: 'Cora Stone');
+      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var box = boxBuilder();
+      await box.storeAll([crollis, cstone, dsnow]);
+
+      box = await reconnectIfPersistent(box);
+      expect(await box.selectFrom(User).orderBy('name').ascending().list(), equals([crollis, cstone, dsnow]));
+    });
+
+    test('find', () async {
+      User crollis = User(id: 'crollis', name: 'Christine Rollis');
+      User cstone = User(id: 'cstone', name: 'Cora Stone');
+      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var box = boxBuilder();
+      await box.storeAll([crollis, cstone, dsnow]);
+
+      box = await reconnectIfPersistent(box);
+      expect(await box.find('dsnow', User), equals(dsnow));
+    });
+  });
 }
 
 class User {

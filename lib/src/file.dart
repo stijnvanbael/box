@@ -72,23 +72,23 @@ class FileBox extends MemoryBox {
     })).asyncExpand((Stream stream) => stream);
   }
 
-  Future<T> find<T>(key) {
-    TypeReflection reflection = TypeReflection<T>();
+  Future<T> find<T>(key, [Type type]) {
+    TypeReflection reflection = TypeReflection<T>(type);
     String typeName = reflection.name;
     if (entities.isEmpty) {
       return _load(reflection).toList().then((values) {
         entities[typeName] = Maps.index(values, (value) => Box.keyOf(value));
-        return super.find<T>(key);
+        return super.find<T>(key, type);
       });
     }
-    return super.find<T>(key);
+    return super.find<T>(key, type);
   }
 
   @override
-  Future deleteAll<T>() async {
-    await super.deleteAll();
-    var type = TypeReflection<T>();
-    var file = _fileOf(type.name);
+  Future deleteAll<T>([Type type]) async {
+    await super.deleteAll<T>(type);
+    var reflection = TypeReflection<T>(type);
+    var file = _fileOf(reflection.name);
     if (file.existsSync()) {
       await file.delete();
     }

@@ -21,8 +21,8 @@ class MongoDbBox extends Box {
   }
 
   @override
-  Future<T> find<T>(key) async {
-    var collection = await _collectionFor(T);
+  Future<T> find<T>(key, [Type type]) async {
+    var collection = await _collectionFor<T>(type);
     var document;
     if (key is Map) {
       var selector = where;
@@ -31,11 +31,11 @@ class MongoDbBox extends Box {
     } else {
       document = await collection.findOne(where.eq('_id', _toId(key)));
     }
-    return _toEntity<T>(document);
+    return _toEntity<T>(document, type);
   }
 
   @override
-  QueryStep<T> selectFrom<T>() => _QueryStep<T>(this);
+  QueryStep<T> selectFrom<T>([Type type]) => _QueryStep<T>(this, type);
 
   @override
   Future store(Object entity) async {
@@ -48,19 +48,19 @@ class MongoDbBox extends Box {
     if (_db.state == State.INIT) {
       await _db.open();
     }
-    return _db.collection(_collectionNameFor(type));
+    return _db.collection(_collectionNameFor(T == dynamic ? type : T));
   }
 
   String _collectionNameFor(Type type) => convertToSpinalCase(TypeReflection(type).name);
 
   @override
-  Future deleteAll<T>() async {
-    var collection = await _collectionFor(T);
+  Future deleteAll<T>([Type type]) async {
+    var collection = await _collectionFor<T>(type);
     await collection.drop();
   }
 
-  _toEntity<T>(Map<String, dynamic> document) {
-    return Conversion.convert(document).to(T);
+  _toEntity<T>(Map<String, dynamic> document, Type type) {
+    return Conversion.convert(document).to(T == dynamic ? type : T);
   }
 
   @override
@@ -68,13 +68,13 @@ class MongoDbBox extends Box {
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
-  _QueryStep(MongoDbBox box) : super(box, {}, {});
+  _QueryStep(MongoDbBox box, Type type) : super(box, {}, {}, type);
 
   _QueryStep.withSelector(_QueryStep<T> query, Map<String, dynamic> selector)
-      : super(query._box, selector, query._order);
+      : super(query._box, selector, query._order, query._type);
 
   _QueryStep.withOrder(_QueryStep<T> query, Map<String, int> order)
-      : super(query._box, query._selector, query._order..addAll(order));
+      : super(query._box, query._selector, query._order..addAll(order), query._type);
 
   @override
   OrderByStep<T> orderBy(String field) {
@@ -120,34 +120,35 @@ class _OrderByStep<T> implements OrderByStep<T> {
   _OrderByStep(this.field, this._query);
 
   @override
-  ExpectationStep<T> ascending() => _ExpectationStep(_query._box, _query._selector, {field: 1});
+  ExpectationStep<T> ascending() => _ExpectationStep(_query._box, _query._selector, {field: 1}, _query._type);
 
   @override
-  ExpectationStep<T> descending() => _ExpectationStep(_query._box, _query._selector, {field: -1});
+  ExpectationStep<T> descending() => _ExpectationStep(_query._box, _query._selector, {field: -1}, _query._type);
 }
 
 class _ExpectationStep<T> extends ExpectationStep<T> {
   final MongoDbBox _box;
   final Map<String, dynamic> _selector;
   final Map<String, int> _order;
+  final Type _type;
 
-  _ExpectationStep(this._box, this._selector, this._order);
+  _ExpectationStep(this._box, this._selector, this._order, this._type);
 
   @override
   Stream<T> stream({int limit = 1000000, int offset = 0}) async* {
-    var collection = await _box._collectionFor(T);
+    var collection = await _box._collectionFor<T>(_type);
     yield* collection
         .find({r'$query': _selector, r'$orderby': _order})
         .skip(offset) // TODO: find a more efficient way to do this
         .take(limit)
-        .map((document) => _box._toEntity<T>(document));
+        .map((document) => _box._toEntity<T>(document, _type));
   }
 
   @override
   Future<T> unique() async {
-    var collection = await _box._collectionFor(T);
+    var collection = await _box._collectionFor<T>(_type);
     var document = await collection.findOne(_selector);
-    return _box._toEntity<T>(document);
+    return _box._toEntity<T>(document, _type);
   }
 }
 
