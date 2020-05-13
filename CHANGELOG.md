@@ -1,21 +1,23 @@
-Backlog
-=======
-* [ ] Firebase support
-* [ ] PostgreSQL support
-* [ ] Mirrorless reflection
-* [ ] SQLite support
-* [ ] Group by
-* [ ] Join
+0.2.3
+-----
+* [x] Limit
+* [x] Offset
+* [x] Select and map result
 
-Done
-====
-
+0.2.2
+-----
 * [x] MongoDB support
 * [x] Deep queries
 * [x] Greater than (or equal)
 * [x] Less than (or equal)
 * [x] Between
 * [x] Dynamically typed queries
-* [x] Limit
-* [x] Offset
-* [x] Select and map result
+
+Backlog
+-------
+* [ ] Firebase support
+* [ ] PostgreSQL support
+* [ ] Mirrorless reflection
+* [ ] SQLite support
+* [ ] Group by
+* [ ] Join
