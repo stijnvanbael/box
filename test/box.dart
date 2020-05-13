@@ -286,6 +286,68 @@ void runTests(String name, Box boxBuilder()) {
       expect(await box.find('dsnow', User), equals(dsnow));
     });
   });
+
+  group('$name - Select fields', () {
+    test('As simple map', () async {
+      User crollis = User(id: 'crollis', name: 'Christine Rollis', lastPost: Post(text: 'Bye!'));
+      User cstone = User(id: 'cstone', name: 'Cora Stone', lastPost: Post(text: 'Signing off'));
+      User dsnow = User(id: 'dsnow', name: 'Donovan Snow', lastPost: Post(text: 'Hi!'));
+      var box = boxBuilder();
+      await box.storeAll([crollis, cstone, dsnow]);
+
+      box = await reconnectIfPersistent(box);
+      expect(
+          await box
+              .select([$('name'), $('lastPost.text', alias: 'words')])
+              .from(User)
+              .where('id')
+              .equals('crollis')
+              .list(),
+          equals([
+            {'name': 'Christine Rollis', 'words': 'Bye!'}
+          ]));
+    });
+    test('Cenvert result', () async {
+      User crollis = User(id: 'crollis', name: 'Christine Rollis', lastPost: Post(text: 'Bye!'));
+      User cstone = User(id: 'cstone', name: 'Cora Stone', lastPost: Post(text: 'Signing off'));
+      User dsnow = User(id: 'dsnow', name: 'Donovan Snow', lastPost: Post(text: 'Hi!'));
+      var box = boxBuilder();
+      await box.storeAll([crollis, cstone, dsnow]);
+
+      box = await reconnectIfPersistent(box);
+      expect(
+          await box
+              .select([$('name'), $('lastPost.text', alias: 'words')])
+              .from(User)
+              .orderBy('name')
+              .ascending()
+              .mapTo<LastWords>()
+              .list(),
+          equals([
+            LastWords(name: 'Christine Rollis', words: 'Bye!'),
+            LastWords(name: 'Cora Stone', words: 'Signing off'),
+            LastWords(name: 'Donovan Snow', words: 'Hi!'),
+          ]));
+    });
+  });
+}
+
+class LastWords {
+  String name;
+  String words;
+
+  LastWords({this.name, this.words});
+
+  @override
+  String toString() => '$name: $words';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LastWords && runtimeType == other.runtimeType && name == other.name && words == other.words;
+
+  @override
+  int get hashCode => name.hashCode ^ words.hashCode;
 }
 
 class User {

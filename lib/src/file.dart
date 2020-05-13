@@ -12,10 +12,7 @@ class FileBox extends MemoryBox {
   @override
   bool get persistent => true;
 
-  FileBox(this._path) {
-    Converters.add(_ObjectToBoxJson());
-    Converters.add(_BoxJsonToObject());
-  }
+  FileBox(this._path);
 
   Future store(Object entity) {
     super.store(entity);
@@ -35,7 +32,7 @@ class FileBox extends MemoryBox {
     }
     await file.create(recursive: true);
     var json = await Stream.fromIterable(entities.values)
-        .map((value) => Conversion.convert(value).to(_BoxJson).toString())
+        .map((value) => jsonEncode(Conversion.convert(value).to(Map)).toString())
         .join("\n");
     await file.writeAsString(json.toString(), mode: FileMode.append);
     _persisting = false;
@@ -63,7 +60,7 @@ class FileBox extends MemoryBox {
       if (exists) {
         return file.openRead().transform(utf8.decoder).transform(const LineSplitter()).map((line) {
           if (line.startsWith("{")) {
-            return Conversion.convert(_BoxJson(line)).to(reflection.rawType);
+            return Conversion.convert(jsonDecode(line)).to(reflection.rawType);
           }
           return null;
         }).where((item) => item != null);
@@ -93,81 +90,4 @@ class FileBox extends MemoryBox {
       await file.delete();
     }
   }
-}
-
-class _ObjectToBoxJson extends ConverterBase<Object, _BoxJson> {
-  _ObjectToBoxJson() : super(TypeReflection(Object), TypeReflection(_BoxJson));
-
-  _BoxJson convertTo(Object object, TypeReflection targetReflection) {
-    var simplified = _convert(object);
-    return _BoxJson(jsonEncode(simplified));
-  }
-
-  _convert(object) {
-    if (object is DateTime) {
-      return object.toString();
-    } else if (object == null || object is String || object is num || object is bool) {
-      return object;
-    } else if (object is Iterable) {
-      return List.from(object.map((item) => _convert(item)));
-    } else if (object is Map) {
-      Map map = {};
-      object.keys.forEach((k) => map[k.toString()] = _convert(object[k]));
-      return map;
-    } else {
-      TypeReflection type = TypeReflection.fromInstance(object);
-      return type.fields.values
-          .where((field) => !field.has(Transient))
-          .map((field) => {field.name: _convert(field.value(object))})
-          .reduce((Map m1, Map m2) {
-        m2.addAll(m1);
-        return m2;
-      });
-    }
-  }
-}
-
-class _BoxJsonToObject extends ConverterBase<_BoxJson, Object> {
-  _BoxJsonToObject() : super(TypeReflection(_BoxJson), TypeReflection(Object));
-
-  Object convertTo(_BoxJson json, TypeReflection targetReflection) {
-    var decoded = jsonDecode(json.toString());
-    return _convert(decoded, targetReflection);
-  }
-
-  _convert(object, TypeReflection targetReflection) {
-    if (object is Map) {
-      if (targetReflection.sameOrSuper(Map)) {
-        TypeReflection keyType = targetReflection.typeArguments[0];
-        TypeReflection valueType = targetReflection.typeArguments[1];
-        Map map = {};
-        object.keys.forEach((k) {
-          var newKey = keyType.sameOrSuper(k) ? k : keyType.construct(args: [k]);
-          map[newKey] = _convert(object[k], valueType);
-        });
-        return map;
-      } else {
-        var instance = targetReflection.construct();
-        object.keys.forEach((k) {
-          if (targetReflection.fields[k] == null)
-            throw JsonException('Unknown property: ' + targetReflection.name + '.' + k);
-        });
-        Maps.forEach(targetReflection.fields, (name, field) => field.set(instance, _convert(object[name], field.type)));
-        return instance;
-      }
-    } else if (object is Iterable) {
-      var iterable = targetReflection.construct();
-      var itemType = targetReflection.typeArguments[0];
-      object.forEach((i) => iterable.add(_convert(i, itemType)));
-      return iterable;
-    } else if (targetReflection.sameOrSuper(DateTime)) {
-      return object != null ? DateTime.parse(object) : null;
-    } else {
-      return object;
-    }
-  }
-}
-
-class _BoxJson extends Json {
-  _BoxJson(String json) : super(json);
 }

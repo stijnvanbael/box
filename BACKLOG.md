@@ -18,3 +18,4 @@ Done
 * [x] Dynamically typed queries
 * [x] Limit
 * [x] Offset
+* [x] Select and map result

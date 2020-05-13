@@ -8,7 +8,7 @@ dependencies:
   io: ^0.3.3
   meta: ^1.1.8
   collection: ^1.14.11
-  reflective: ^0.1.1
+  reflective: ^0.1.9
   mongo_dart: ^0.4.0
   inflection2: ^0.4.2
   firebase: ^7.2.1

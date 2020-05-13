@@ -4,6 +4,11 @@ import 'package:reflective/reflective.dart';
 class MemoryBox extends Box {
   final Map<String, Map> entities = {};
 
+  MemoryBox() {
+    Converters.add(_ObjectToMap());
+    Converters.add(_MapToObject());
+  }
+
   @override
   bool get persistent => false;
 
@@ -31,6 +36,9 @@ class MemoryBox extends Box {
   }
 
   @override
+  SelectStep select(List<Field> fields) => _SelectStep(this, fields);
+
+  @override
   _QueryStep<T> selectFrom<T>([Type type]) {
     return _QueryStep<T>(this, type);
   }
@@ -49,10 +57,21 @@ class MemoryBox extends Box {
   Future close() async {}
 }
 
-class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
-  _QueryStep(Box box, Type type) : super(box, type);
+class _SelectStep implements SelectStep {
+  final Box _box;
+  final List<Field> _fields;
 
-  _QueryStep.withPredicate(_QueryStep<T> query, Predicate<T> predicate, Type type) : super(query.box, type, predicate);
+  _SelectStep(this._box, this._fields);
+
+  @override
+  from(Type type) => _QueryStep(_box, type, _fields);
+}
+
+class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
+  _QueryStep(Box box, [Type type, List<Field> selectFields]) : super(box, type ?? T, selectFields);
+
+  _QueryStep.withPredicate(_QueryStep<T> query, Predicate<T> predicate, Type type)
+      : super(query.box, type, query.selectFields, predicate);
 
   @override
   WhereStep<T> where(String field) => _WhereStep(field, this);
@@ -86,12 +105,13 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
   final Predicate<T> predicate;
   final _Ordering<T> ordering;
   final Type _type;
+  final List<Field> selectFields;
 
-  _ExpectationStep(this.box, [this._type, this.predicate, this.ordering]);
+  _ExpectationStep(this.box, [this._type, this.selectFields, this.predicate, this.ordering]);
 
   @override
   Stream<T> stream({int limit = 1000000, int offset = 0}) {
-    return box._query(TypeReflection<T>(_type), predicate, ordering).skip(offset).take(limit);
+    return box._query(TypeReflection<T>(_type), predicate, ordering).skip(offset).take(limit).map(_selectFields);
   }
 
   @override
@@ -100,6 +120,18 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
   }
 
   Type get type => T == dynamic ? _type : T;
+
+  T _selectFields(dynamic record) {
+    if (selectFields == null) {
+      return record;
+    }
+    var reflection = TypeReflection<T>(_type);
+    return Map.fromIterable(
+      selectFields,
+      key: (field) => field.alias,
+      value: (field) => reflection.field(field.name).value(record),
+    ) as T;
+  }
 }
 
 class _WhereStep<T> implements WhereStep<T> {
@@ -157,11 +189,11 @@ class _OrderByStep<T> implements OrderByStep<T> {
 
   @override
   ExpectationStep<T> ascending() =>
-      _ExpectationStep(query.box, query.type, query.predicate, _Ascending(query.type, field));
+      _ExpectationStep(query.box, query.type, query.selectFields, query.predicate, _Ascending(query.type, field));
 
   @override
   ExpectationStep<T> descending() =>
-      _ExpectationStep(query.box, query.type, query.predicate, _Descending(query.type, field));
+      _ExpectationStep(query.box, query.type, query.selectFields, query.predicate, _Descending(query.type, field));
 }
 
 class _Ascending<T> extends _Ordering<T> {
@@ -307,5 +339,76 @@ abstract class _ExpressionPredicate<T, E> extends Predicate<T> {
       typeReflection = TypeReflection.fromInstance(currentValue);
     }
     return currentValue;
+  }
+}
+
+class _ObjectToMap extends ConverterBase<Object, Map> {
+  _ObjectToMap() : super(TypeReflection(Object), TypeReflection<Map>());
+
+  Map convertTo(Object object, TypeReflection targetReflection) {
+    return _convert(object);
+  }
+
+  dynamic _convert(dynamic object) {
+    if (object is DateTime) {
+      return object.toString();
+    } else if (object == null || object is String || object is num || object is bool) {
+      return object;
+    } else if (object is Iterable) {
+      return List.from(object.map((item) => _convert(item)));
+    } else if (object is Map) {
+      Map map = {};
+      object.keys.forEach((k) => map[k.toString()] = _convert(object[k]));
+      return map;
+    } else {
+      TypeReflection type = TypeReflection.fromInstance(object);
+      return type.fields.values
+          .where((field) => !field.has(Transient))
+          .map((field) => {field.name: _convert(field.value(object))})
+          .reduce((Map m1, Map m2) {
+        m2.addAll(m1);
+        return m2;
+      });
+    }
+  }
+}
+
+class _MapToObject extends ConverterBase<Map, Object> {
+  _MapToObject() : super(TypeReflection<Map>(), TypeReflection(Object));
+
+  Object convertTo(Map map, TypeReflection targetReflection) {
+    return _convert(map, targetReflection);
+  }
+
+  _convert(dynamic object, TypeReflection targetReflection) {
+    if (object is Map) {
+      if (targetReflection.sameOrSuper(Map)) {
+        TypeReflection keyType = targetReflection.typeArguments[0];
+        TypeReflection valueType = targetReflection.typeArguments[1];
+        Map map = {};
+        object.keys.forEach((k) {
+          var newKey = keyType.sameOrSuper(k) ? k : keyType.construct(args: [k]);
+          map[newKey] = _convert(object[k], valueType);
+        });
+        return map;
+      } else {
+        var instance = targetReflection.construct();
+        object.keys.forEach((k) {
+          if (targetReflection.fields[k] == null)
+            throw JsonException('Unknown property: ' + targetReflection.name + '.' + k);
+        });
+        Maps.forEach(targetReflection.fields, (name, field) => field.set(instance, _convert(object[name], field.type)));
+        return instance;
+      }
+    } else if (object is Iterable) {
+      var iterable = targetReflection.construct();
+      var itemType = targetReflection.typeArguments[0];
+      object.forEach((i) => iterable.add(_convert(i, itemType)));
+      return iterable;
+    } else if (targetReflection.sameOrSuper(DateTime)) {
+      return object != null ? DateTime.parse(object) : null;
+    } else {
+      return object;
+    }
   }
 }

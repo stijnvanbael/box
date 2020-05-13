@@ -35,7 +35,7 @@ class MongoDbBox extends Box {
   }
 
   @override
-  QueryStep<T> selectFrom<T>([Type type]) => _QueryStep<T>(this, type);
+  QueryStep<T> selectFrom<T>([Type type]) => _QueryStep<T>(this, type, null);
 
   @override
   Future store(Object entity) async {
@@ -65,16 +65,29 @@ class MongoDbBox extends Box {
 
   @override
   Future close() async => _db.close();
+
+  @override
+  SelectStep select(List<Field> fields) => _SelectStep(this, fields);
+}
+
+class _SelectStep implements SelectStep {
+  final Box _box;
+  final List<Field> _fields;
+
+  _SelectStep(this._box, this._fields);
+
+  @override
+  from(Type type) => _QueryStep(_box, type, _fields);
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
-  _QueryStep(MongoDbBox box, Type type) : super(box, {}, {}, type);
+  _QueryStep(MongoDbBox box, Type type, List<Field> fields) : super(box, {}, {}, type ?? T, fields);
 
   _QueryStep.withSelector(_QueryStep<T> query, Map<String, dynamic> selector)
-      : super(query._box, selector, query._order, query._type);
+      : super(query._box, selector, query._order, query._type, query._selectFields);
 
   _QueryStep.withOrder(_QueryStep<T> query, Map<String, int> order)
-      : super(query._box, query._selector, query._order..addAll(order), query._type);
+      : super(query._box, query._selector, query._order..addAll(order), query._type, query._selectFields);
 
   @override
   OrderByStep<T> orderBy(String field) {
@@ -120,10 +133,12 @@ class _OrderByStep<T> implements OrderByStep<T> {
   _OrderByStep(this.field, this._query);
 
   @override
-  ExpectationStep<T> ascending() => _ExpectationStep(_query._box, _query._selector, {field: 1}, _query._type);
+  ExpectationStep<T> ascending() =>
+      _ExpectationStep(_query._box, _query._selector, {field: 1}, _query._type, _query._selectFields);
 
   @override
-  ExpectationStep<T> descending() => _ExpectationStep(_query._box, _query._selector, {field: -1}, _query._type);
+  ExpectationStep<T> descending() =>
+      _ExpectationStep(_query._box, _query._selector, {field: -1}, _query._type, _query._selectFields);
 }
 
 class _ExpectationStep<T> extends ExpectationStep<T> {
@@ -131,8 +146,9 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
   final Map<String, dynamic> _selector;
   final Map<String, int> _order;
   final Type _type;
+  final List<Field> _selectFields;
 
-  _ExpectationStep(this._box, this._selector, this._order, this._type);
+  _ExpectationStep(this._box, this._selector, this._order, this._type, this._selectFields);
 
   @override
   Stream<T> stream({int limit = 1000000, int offset = 0}) async* {
@@ -141,8 +157,24 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
         .find({r'$query': _selector, r'$orderby': _order})
         .skip(offset) // TODO: find a more efficient way to do this
         .take(limit)
-        .map((document) => _box._toEntity<T>(document, _type));
+        .map(_applySelectFields);
   }
+
+  T _applySelectFields(Map<String, dynamic> record) {
+    if (_selectFields == null) {
+      return _box._toEntity<T>(record, _type);
+    }
+    var map = Map.fromIterable(
+      _selectFields,
+      key: (field) => field.alias,
+      value: (field) => _getFieldValue(record, field.name),
+    );
+    return map as T;
+  }
+
+  _getFieldValue(Map<String, dynamic> record, String name) => name.contains('.')
+      ? _getFieldValue(record[name.substring(0, name.indexOf('.'))], name.substring(name.indexOf('.') + 1))
+      : record[name];
 
   @override
   Future<T> unique() async {
@@ -156,7 +188,7 @@ class _WhereStep<T> implements WhereStep<T> {
   final String field;
   final _QueryStep<T> query;
 
-  _WhereStep(this.field, this.query);
+  _WhereStep(String field, this.query) : field = _translate(field, query._type);
 
   Map<String, dynamic> combine(Map<String, dynamic> selector) => selector;
 
@@ -186,6 +218,9 @@ class _WhereStep<T> implements WhereStep<T> {
 
   @override
   QueryStep<T> between(dynamic value1, dynamic value2) => _queryStep({r'$gt': value1, r'$lt': value2});
+
+  static _translate(String field, Type type) =>
+      !field.contains('.') && TypeReflection(type).field(field).metadata(Key).isNotEmpty ? '_id' : field;
 }
 
 class _NotStep<T> extends _WhereStep<T> {

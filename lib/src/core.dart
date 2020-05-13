@@ -24,9 +24,15 @@ abstract class Box {
 
   QueryStep<T> selectFrom<T>([Type type]);
 
+  SelectStep select(List<Field> fields);
+
   Future deleteAll<T>([Type type]);
 
   Future close();
+}
+
+abstract class SelectStep {
+  QueryStep from(Type type);
 }
 
 abstract class QueryStep<T> extends ExpectationStep<T> {
@@ -63,12 +69,40 @@ abstract class OrderByStep<T> {
   ExpectationStep<T> descending();
 }
 
+typedef T Mapper<T>(dynamic input);
+
 abstract class ExpectationStep<T> {
+  ExpectationStep<M> mapTo<M>([Mapper<M> mapper]) => _MappingStep(this, mapper ?? _typeMapper<M>());
+
   Stream<T> stream({int limit, int offset});
 
   Future<List<T>> list({int limit = 1000000, int offset = 0}) async => stream(limit: limit, offset: offset).toList();
 
   Future<T> unique();
+
+  Mapper<M> _typeMapper<M>() {
+    if (M != dynamic) {
+      var reflection = TypeReflection<M>();
+      return (record) => Conversion.convert(record).to(reflection.rawType);
+    }
+    return (record) => record;
+  }
+}
+
+class _MappingStep<T> extends ExpectationStep<T> {
+  final ExpectationStep<dynamic> _wrapped;
+  final Mapper<T> _mapper;
+
+  _MappingStep(this._wrapped, this._mapper);
+
+  @override
+  ExpectationStep<M> mapTo<M>([M Function(T p1) mapper]) => _MappingStep(this, mapper);
+
+  @override
+  Stream<T> stream({int limit, int offset}) => _wrapped.stream(limit: limit, offset: offset).map(_mapper);
+
+  @override
+  Future<T> unique() => stream().first;
 }
 
 abstract class Predicate<T> {
@@ -130,3 +164,12 @@ class Key {
 }
 
 const key = const Key();
+
+class Field {
+  final String name;
+  final String alias;
+
+  Field(this.name, this.alias);
+}
+
+$(String name, {String alias}) => Field(name, alias ?? name);
