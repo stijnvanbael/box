@@ -1,16 +1,18 @@
 import 'package:box/box.dart';
 import 'package:box/mongodb.dart';
 import 'package:collection/collection.dart';
-import 'package:reflective/reflective.dart';
 import 'package:test/test.dart';
 
-main() {
-  runTests('Memory', () => MemoryBox());
-  runTests('File', () => FileBox('.box/test'));
-  runTests('MongoDB', () => MongoDbBox('localhost', database: 'test'));
+part 'box.g.dart';
+
+void main() {
+  var registry = initBoxRegistry();
+  runTests('Memory', () => MemoryBox(registry));
+  runTests('File', () => FileBox('.box/test', registry));
+  runTests('MongoDB', () => MongoDbBox('localhost', registry, database: 'test'));
 }
 
-void runTests(String name, Box boxBuilder()) {
+void runTests(String name, Box Function() boxBuilder) {
   Future<Box> reconnectIfPersistent(Box box) async {
     if (box.persistent) {
       await box.close();
@@ -32,7 +34,7 @@ void runTests(String name, Box boxBuilder()) {
       var box = boxBuilder();
       expect(await box.find<User>('jdoe'), isNull);
 
-      User user = john;
+      var user = john;
       await box.store(user);
 
       box = await reconnectIfPersistent(box);
@@ -42,11 +44,11 @@ void runTests(String name, Box boxBuilder()) {
     test('Find by composite key', () async {
       var box = boxBuilder();
       await box.deleteAll<Post>();
-      User user = john;
-      DateTime timestamp = DateTime.parse('2014-12-11T10:09:08Z');
+      var user = john;
+      var timestamp = DateTime.parse('2014-12-11T10:09:08Z');
       expect(await box.find<Post>({'userId': user.id, 'timestamp': timestamp}), isNull);
 
-      Post post = Post(
+      var post = Post(
           userId: user.id,
           timestamp: timestamp,
           text: 'I just discovered dart-box\nIt\'s awesome!',
@@ -54,18 +56,18 @@ void runTests(String name, Box boxBuilder()) {
       await box.store(post);
 
       box = await reconnectIfPersistent(box);
-      Post found = await box.find<Post>({'userId': user.id, 'timestamp': timestamp});
+      var found = await box.find<Post>({'userId': user.id, 'timestamp': timestamp});
       expect(found, equals(post));
     });
   });
 
   group('$name - Predicates', () {
     test('equals predicate, unique', () async {
-      User jdoe = john;
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var jdoe = john;
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
@@ -74,11 +76,11 @@ void runTests(String name, Box boxBuilder()) {
     });
 
     test('like predicate, list, order by', () async {
-      User jdoe = john;
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var jdoe = john;
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
@@ -88,11 +90,11 @@ void runTests(String name, Box boxBuilder()) {
     });
 
     test('gt predicate', () async {
-      User jdoe = john;
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var jdoe = john;
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
@@ -102,11 +104,11 @@ void runTests(String name, Box boxBuilder()) {
     });
 
     test('gte predicate', () async {
-      User jdoe = john;
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var jdoe = john;
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
@@ -116,11 +118,11 @@ void runTests(String name, Box boxBuilder()) {
     });
 
     test('lt predicate', () async {
-      User jdoe = john;
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var jdoe = john;
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
@@ -130,11 +132,11 @@ void runTests(String name, Box boxBuilder()) {
     });
 
     test('gte predicate', () async {
-      User jdoe = john;
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var jdoe = john;
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
@@ -144,11 +146,11 @@ void runTests(String name, Box boxBuilder()) {
     });
 
     test('between predicate', () async {
-      User jdoe = john;
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var jdoe = john;
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
@@ -160,11 +162,11 @@ void runTests(String name, Box boxBuilder()) {
 
   group('$name - Operators', () {
     test('AND', () async {
-      User jdoe = john;
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var jdoe = john;
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
@@ -173,11 +175,11 @@ void runTests(String name, Box boxBuilder()) {
     });
 
     test('OR', () async {
-      User jdoe = john;
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var jdoe = john;
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
@@ -196,11 +198,11 @@ void runTests(String name, Box boxBuilder()) {
     });
 
     test('NOT, descending', () async {
-      User jdoe = john;
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var jdoe = john;
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
@@ -213,17 +215,17 @@ void runTests(String name, Box boxBuilder()) {
 
   group('$name - Deep queries', () {
     test('Deep query into value object', () async {
-      User crollis =
+      var crollis =
           User(id: 'crollis', name: 'Christine Rollis', lastPost: Post(text: 'Dart 2.6.1 is out!', keywords: ['dart']));
-      User cstone = User(
+      var cstone = User(
           id: 'cstone',
           name: 'Cora Stone',
           lastPost: Post(text: 'Cupcakes are ready!', keywords: ['baking', 'cupcakes']));
-      User dsnow = User(
+      var dsnow = User(
           id: 'dsnow',
           name: 'Donovan Snow',
           lastPost: Post(text: 'I just discovered dart-box\nIt\'s awesome!', keywords: ['persistence', 'dart']));
-      User koneil = User(
+      var koneil = User(
           id: 'koneil',
           name: 'Kendall Oneil',
           lastPost: Post(text: 'Has anyone seen my dog?', keywords: ['dog', 'lost']));
@@ -238,11 +240,11 @@ void runTests(String name, Box boxBuilder()) {
 
   group('$name - Limit and offset', () {
     test('Limit', () async {
-      User jdoe = john;
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var jdoe = john;
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
@@ -250,11 +252,11 @@ void runTests(String name, Box boxBuilder()) {
       expect(await box.selectFrom<User>().orderBy('name').ascending().list(limit: 3), equals([crollis, cstone, dsnow]));
     });
     test('Offset', () async {
-      User jdoe = john;
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      User koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var jdoe = john;
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var koneil = User(id: 'koneil', name: 'Kendall Oneil');
       var box = boxBuilder();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
@@ -265,9 +267,9 @@ void runTests(String name, Box boxBuilder()) {
 
   group('$name - Dynamic type parameters', () {
     test('select', () async {
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var box = boxBuilder();
       await box.storeAll([crollis, cstone, dsnow]);
 
@@ -276,9 +278,9 @@ void runTests(String name, Box boxBuilder()) {
     });
 
     test('find', () async {
-      User crollis = User(id: 'crollis', name: 'Christine Rollis');
-      User cstone = User(id: 'cstone', name: 'Cora Stone');
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var box = boxBuilder();
       await box.storeAll([crollis, cstone, dsnow]);
 
@@ -289,9 +291,9 @@ void runTests(String name, Box boxBuilder()) {
 
   group('$name - Select fields', () {
     test('As simple map', () async {
-      User crollis = User(id: 'crollis', name: 'Christine Rollis', lastPost: Post(text: 'Bye!'));
-      User cstone = User(id: 'cstone', name: 'Cora Stone', lastPost: Post(text: 'Signing off'));
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow', lastPost: Post(text: 'Hi!'));
+      var crollis = User(id: 'crollis', name: 'Christine Rollis', lastPost: Post(text: 'Bye!'));
+      var cstone = User(id: 'cstone', name: 'Cora Stone', lastPost: Post(text: 'Signing off'));
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow', lastPost: Post(text: 'Hi!'));
       var box = boxBuilder();
       await box.storeAll([crollis, cstone, dsnow]);
 
@@ -307,10 +309,10 @@ void runTests(String name, Box boxBuilder()) {
             {'name': 'Christine Rollis', 'words': 'Bye!'}
           ]));
     });
-    test('Cenvert result', () async {
-      User crollis = User(id: 'crollis', name: 'Christine Rollis', lastPost: Post(text: 'Bye!'));
-      User cstone = User(id: 'cstone', name: 'Cora Stone', lastPost: Post(text: 'Signing off'));
-      User dsnow = User(id: 'dsnow', name: 'Donovan Snow', lastPost: Post(text: 'Hi!'));
+    test('Convert result', () async {
+      var crollis = User(id: 'crollis', name: 'Christine Rollis', lastPost: Post(text: 'Bye!'));
+      var cstone = User(id: 'cstone', name: 'Cora Stone', lastPost: Post(text: 'Signing off'));
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow', lastPost: Post(text: 'Hi!'));
       var box = boxBuilder();
       await box.storeAll([crollis, cstone, dsnow]);
 
@@ -332,11 +334,14 @@ void runTests(String name, Box boxBuilder()) {
   });
 }
 
+@entity
 class LastWords {
   String name;
   String words;
 
   LastWords({this.name, this.words});
+
+  LastWords.fromJson(Map map) : this(name: map['name'], words: map['words']);
 
   @override
   String toString() => '$name: $words';
@@ -348,8 +353,11 @@ class LastWords {
 
   @override
   int get hashCode => name.hashCode ^ words.hashCode;
+
+  Map<String, dynamic> toJson() => {'name': name, 'words': words};
 }
 
+@entity
 class User {
   @key
   String id;
@@ -359,29 +367,58 @@ class User {
 
   User({this.id, this.name, this.lastPost, this.posts});
 
+  User.fromJson(Map map)
+      : this(
+          id: map['id'],
+          name: map['name'],
+          lastPost: map['lastPost'] != null ? Post.fromJson(map['lastPost']) : null,
+          posts: map['posts'] != null ? map['posts'].map((postMap) => Post.fromJson(postMap)) : null,
+        );
+
+  @override
   String toString() => '@' + id + ' (' + name + ')';
 
-  int get hashCode => Objects.hash([id, name]);
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode;
 
+  @override
   bool operator ==(other) {
     if (other is! User) return false;
     User user = other;
     return (user.id == id && user.name == name);
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'lastPost': lastPost?.toJson(),
+        'posts': posts?.map((post) => post.toJson()),
+      };
 }
 
+@entity
 class Post {
   @key
   String userId;
-  @key
+  @Key()
   DateTime timestamp;
   String text;
   List<String> keywords;
 
   Post({this.userId, this.timestamp, this.text, this.keywords});
 
-  int get hashCode => Objects.hash([userId, timestamp, text]);
+  Post.fromJson(Map map)
+      : this(
+          userId: map['userId'],
+          timestamp: map['timestamp'] != null ? DateTime.parse(map['timestamp']) : null,
+          text: map['text'],
+          keywords: map['keywords'] != null ? List<String>.from(map['keywords']) : null,
+        );
 
+  @override
+  int get hashCode => userId.hashCode ^ timestamp.hashCode ^ text.hashCode ^ keywords.hashCode;
+
+  @override
   bool operator ==(other) {
     if (other is! Post) return false;
     Post post = other;
@@ -390,4 +427,11 @@ class Post {
         post.text == text &&
         ListEquality().equals(post.keywords, keywords));
   }
+
+  Map<String, dynamic> toJson() => {
+        'userId': userId,
+        'timestamp': timestamp?.toIso8601String(),
+        'text': text,
+        'keywords': keywords,
+      };
 }

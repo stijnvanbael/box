@@ -1,3 +1,8 @@
+0.2.4
+-----
+* [ ] Removed dependency on mirrors at runtime
+* [ ] Firestore support
+
 0.2.3
 -----
 * [x] Limit
@@ -15,9 +20,8 @@
 
 Backlog
 -------
-* [ ] Firebase support
 * [ ] PostgreSQL support
-* [ ] Mirrorless reflection
+* [ ] Automatic toJson and fromJson
 * [ ] SQLite support
 * [ ] Group by
 * [ ] Join

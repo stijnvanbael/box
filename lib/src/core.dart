@@ -1,26 +1,25 @@
+library box.core;
+
 import 'package:collection/collection.dart';
-import 'package:reflective/reflective.dart';
 
 abstract class Box {
+  final Registry registry;
+
+  Box(this.registry);
+
   bool get persistent => true;
 
-  Future store(Object entity);
+  Future store(dynamic entity);
 
-  Future storeAll(List<Object> entities) async {
+  Future storeAll(List<dynamic> entities) async {
     for (var entity in entities) {
       await store(entity);
     }
   }
 
-  static keyOf(Object entity) {
-    var type = TypeReflection.fromInstance(entity);
-    var key = <String, dynamic>{};
-    type.fieldsWith(Key).values.forEach((field) => key[field.name] = field.value(entity));
-    if (key.isEmpty) throw Exception('No fields found with @key in $type');
-    return key.length == 1 ? key.values.first : Composite(key);
-  }
+  dynamic keyOf(dynamic entity) => registry.lookup(entity.runtimeType).getKey(entity);
 
-  Future<T> find<T>(key, [Type type]);
+  Future<T> find<T>(dynamic key, [Type type]);
 
   QueryStep<T> selectFrom<T>([Type type]);
 
@@ -69,7 +68,7 @@ abstract class OrderByStep<T> {
   ExpectationStep<T> descending();
 }
 
-typedef T Mapper<T>(dynamic input);
+typedef Mapper<T> = T Function(dynamic input);
 
 abstract class ExpectationStep<T> {
   ExpectationStep<M> mapTo<M>([Mapper<M> mapper]) => _MappingStep(this, mapper ?? _typeMapper<M>());
@@ -80,13 +79,9 @@ abstract class ExpectationStep<T> {
 
   Future<T> unique();
 
-  Mapper<M> _typeMapper<M>() {
-    if (M != dynamic) {
-      var reflection = TypeReflection<M>();
-      return (record) => Conversion.convert(record).to(reflection.rawType);
-    }
-    return (record) => record;
-  }
+  Mapper<M> _typeMapper<M>() => (map) => box.registry.lookup<M>().deserialize(map);
+
+  Box get box;
 }
 
 class _MappingStep<T> extends ExpectationStep<T> {
@@ -103,6 +98,9 @@ class _MappingStep<T> extends ExpectationStep<T> {
 
   @override
   Future<T> unique() => stream().first;
+
+  @override
+  Box get box => _wrapped.box;
 }
 
 abstract class Predicate<T> {
@@ -110,9 +108,9 @@ abstract class Predicate<T> {
 
   Predicate<T> not() => NotPredicate(this);
 
-  or(Predicate<T> other) => OrPredicate([this, other]);
+  OrPredicate<T> or(Predicate<T> other) => OrPredicate([this, other]);
 
-  and(Predicate<T> other) => AndPredicate([this, other]);
+  AndPredicate<T> and(Predicate<T> other) => AndPredicate([this, other]);
 }
 
 class AndPredicate<T> extends Predicate<T> {
@@ -147,12 +145,14 @@ class Composite {
 
   Composite(this.components);
 
+  @override
   int get hashCode => components.entries
       .map((entry) => 11 * entry.key.hashCode + 19 * entry.value.hashCode)
       .reduce((int c1, int c2) => c1 + 17 * c2);
 
+  @override
   bool operator ==(other) {
-    if (other == null || !(other is Composite)) {
+    if (!(other is Composite)) {
       return false;
     }
     return MapEquality().equals(components, other.components);
@@ -163,7 +163,13 @@ class Key {
   const Key();
 }
 
-const key = const Key();
+const key = Key();
+
+class Entity {
+  const Entity();
+}
+
+const entity = Entity();
 
 class Field {
   final String name;
@@ -172,4 +178,64 @@ class Field {
   Field(this.name, this.alias);
 }
 
-$(String name, {String alias}) => Field(name, alias ?? name);
+Field $(String name, {String alias}) => Field(name, alias ?? name);
+
+typedef Deserializer<T> = T Function(Map map);
+
+typedef FieldAccessor<T> = dynamic Function(T entity);
+
+abstract class EntitySupport<T> {
+  final FieldAccessor<T> _keyAccessor;
+  final Deserializer<T> _deserializer;
+  final Map<String, FieldAccessor<T>> _fieldAccessors;
+  final List<String> keyFields;
+  final String name;
+
+  EntitySupport(this.name, this._keyAccessor, this._deserializer, this._fieldAccessors, this.keyFields);
+
+  dynamic getKey(T entity) => _keyAccessor(entity);
+
+  T deserialize(Map map) => map != null ? _deserializer(map) : null;
+
+  dynamic getFieldValue(String fieldName, T entity) {
+    var fieldAccessor = _fieldAccessors[fieldName];
+    if(fieldAccessor == null) {
+      // TODO: transitive fields
+      throw 'No such field "$fieldName" on entity $name';
+    }
+    return fieldAccessor(entity);
+  }
+
+  bool isKey(String field) => keyFields.contains(field);
+}
+
+class Registry {
+  final Map<Type, EntitySupport> _entries = {};
+
+  EntitySupport<T> register<T>(EntitySupport<T> support) {
+    _entries[T] = support;
+    return support;
+  }
+
+  EntitySupport<T> lookup<T>([Type type]) {
+    var support = _entries[type ?? T];
+    if (support == null) {
+      throw 'No entry found for ${type ?? T}. To fix this:\n'
+          ' 1. Make sure the class is annotated with @entity\n'
+          ' 2. Make sure box_generator is added to dev_dependencies in pubspec.yaml\n'
+          ' 3. Run "pub run build_runner build" again';
+    }
+    return support;
+  }
+
+  dynamic getFieldValue(String fieldName, dynamic entity) {
+    dynamic currentValue = entity;
+    for (var subField in fieldName.split('.')) {
+      currentValue = lookup(currentValue.runtimeType).getFieldValue(subField, currentValue);
+      if (currentValue == null) {
+        return null;
+      }
+    }
+    return currentValue;
+  }
+}

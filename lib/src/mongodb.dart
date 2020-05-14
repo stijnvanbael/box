@@ -1,9 +1,9 @@
+library box.mongodb;
+
 import 'package:box/core.dart';
-import 'package:box/src/core.dart';
 import 'package:inflection2/inflection2.dart';
 import 'package:meta/meta.dart';
 import 'package:mongo_dart/mongo_dart.dart' show Db, where, DbCollection, State, ObjectId;
-import 'package:reflective/reflective.dart';
 
 class MongoDbBox extends Box {
   final Db _db;
@@ -12,25 +12,17 @@ class MongoDbBox extends Box {
   bool get persistent => true;
 
   MongoDbBox(
-    String hostname, {
-    int port: 27017,
+    String hostname,
+    Registry registry, {
+    int port = 27017,
     @required String database,
-  }) : _db = Db('mongodb://$hostname:$port/$database') {
-    Converters.add(_ObjectToDocument());
-    Converters.add(_DocumentToObject());
-  }
+  })  : _db = Db('mongodb://$hostname:$port/$database'),
+        super(registry);
 
   @override
   Future<T> find<T>(key, [Type type]) async {
     var collection = await _collectionFor<T>(type);
-    var document;
-    if (key is Map) {
-      var selector = where;
-      key.forEach((k, v) => selector.eq('_id.$k', _toId(v)));
-      document = await collection.findOne(selector);
-    } else {
-      document = await collection.findOne(where.eq('_id', _toId(key)));
-    }
+    var document = await collection.findOne(where.eq('_id', _toId(key)));
     return _toEntity<T>(document, type);
   }
 
@@ -38,8 +30,8 @@ class MongoDbBox extends Box {
   QueryStep<T> selectFrom<T>([Type type]) => _QueryStep<T>(this, type, null);
 
   @override
-  Future store(Object entity) async {
-    var document = Conversion.convert(entity).to(Map);
+  Future store(dynamic entity) async {
+    var document = _wrapKey(entity.toJson(), registry.lookup(entity.runtimeType).keyFields);
     var collection = await _collectionFor(entity.runtimeType);
     await collection.save(document);
   }
@@ -51,7 +43,7 @@ class MongoDbBox extends Box {
     return _db.collection(_collectionNameFor(T == dynamic ? type : T));
   }
 
-  String _collectionNameFor(Type type) => convertToSpinalCase(TypeReflection(type).name);
+  String _collectionNameFor(Type type) => convertToSpinalCase(registry.lookup(type).name);
 
   @override
   Future deleteAll<T>([Type type]) async {
@@ -59,8 +51,9 @@ class MongoDbBox extends Box {
     await collection.drop();
   }
 
-  _toEntity<T>(Map<String, dynamic> document, Type type) {
-    return Conversion.convert(document).to(T == dynamic ? type : T);
+  dynamic _toEntity<T>(Map<String, dynamic> document, Type type) {
+    var entitySupport = registry.lookup(T == dynamic ? type : T);
+    return entitySupport.deserialize(_unwrapKey(document, entitySupport.keyFields));
   }
 
   @override
@@ -68,6 +61,35 @@ class MongoDbBox extends Box {
 
   @override
   SelectStep select(List<Field> fields) => _SelectStep(this, fields);
+
+  Map _unwrapKey(Map<String, dynamic> document, List<String> keyFields) {
+    if (document == null) {
+      return null;
+    }
+    var unwrapped = Map<String, dynamic>.from(document);
+    var key = document['_id'];
+    if (keyFields.length == 1) {
+      unwrapped[keyFields.first] = key;
+    } else {
+      unwrapped.addAll(key);
+    }
+    unwrapped.remove('_id');
+    return unwrapped;
+  }
+
+  Map _wrapKey(Map<String, dynamic> document, List<String> keyFields) {
+    if (document == null) {
+      return null;
+    }
+    var wrapped = Map<String, dynamic>.from(document);
+    if (keyFields.length == 1) {
+      wrapped['_id'] = document[keyFields.first];
+    } else {
+      wrapped['_id'] = {for (var key in keyFields) key: document[key]};
+    }
+    wrapped.removeWhere((key, value) => keyFields.contains(key));
+    return wrapped;
+  }
 }
 
 class _SelectStep implements SelectStep {
@@ -77,17 +99,17 @@ class _SelectStep implements SelectStep {
   _SelectStep(this._box, this._fields);
 
   @override
-  from(Type type) => _QueryStep(_box, type, _fields);
+  _QueryStep from(Type type) => _QueryStep(_box, type, _fields);
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
   _QueryStep(MongoDbBox box, Type type, List<Field> fields) : super(box, {}, {}, type ?? T, fields);
 
   _QueryStep.withSelector(_QueryStep<T> query, Map<String, dynamic> selector)
-      : super(query._box, selector, query._order, query._type, query._selectFields);
+      : super(query.box, selector, query._order, query._type, query._selectFields);
 
   _QueryStep.withOrder(_QueryStep<T> query, Map<String, int> order)
-      : super(query._box, query._selector, query._order..addAll(order), query._type, query._selectFields);
+      : super(query.box, query._selector, query._order..addAll(order), query._type, query._selectFields);
 
   @override
   OrderByStep<T> orderBy(String field) {
@@ -134,25 +156,26 @@ class _OrderByStep<T> implements OrderByStep<T> {
 
   @override
   ExpectationStep<T> ascending() =>
-      _ExpectationStep(_query._box, _query._selector, {field: 1}, _query._type, _query._selectFields);
+      _ExpectationStep(_query.box, _query._selector, {field: 1}, _query._type, _query._selectFields);
 
   @override
   ExpectationStep<T> descending() =>
-      _ExpectationStep(_query._box, _query._selector, {field: -1}, _query._type, _query._selectFields);
+      _ExpectationStep(_query.box, _query._selector, {field: -1}, _query._type, _query._selectFields);
 }
 
 class _ExpectationStep<T> extends ExpectationStep<T> {
-  final MongoDbBox _box;
+  @override
+  final MongoDbBox box;
   final Map<String, dynamic> _selector;
   final Map<String, int> _order;
   final Type _type;
   final List<Field> _selectFields;
 
-  _ExpectationStep(this._box, this._selector, this._order, this._type, this._selectFields);
+  _ExpectationStep(this.box, this._selector, this._order, this._type, this._selectFields);
 
   @override
   Stream<T> stream({int limit = 1000000, int offset = 0}) async* {
-    var collection = await _box._collectionFor<T>(_type);
+    var collection = await box._collectionFor<T>(_type);
     yield* collection
         .find({r'$query': _selector, r'$orderby': _order})
         .skip(offset) // TODO: find a more efficient way to do this
@@ -162,25 +185,21 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
 
   T _applySelectFields(Map<String, dynamic> record) {
     if (_selectFields == null) {
-      return _box._toEntity<T>(record, _type);
+      return box._toEntity<T>(record, _type);
     }
-    var map = Map.fromIterable(
-      _selectFields,
-      key: (field) => field.alias,
-      value: (field) => _getFieldValue(record, field.name),
-    );
+    var map = {for (var field in _selectFields) field.alias: _getFieldValue(record, field.name)};
     return map as T;
   }
 
-  _getFieldValue(Map<String, dynamic> record, String name) => name.contains('.')
+  dynamic _getFieldValue(Map<String, dynamic> record, String name) => name.contains('.')
       ? _getFieldValue(record[name.substring(0, name.indexOf('.'))], name.substring(name.indexOf('.') + 1))
       : record[name];
 
   @override
   Future<T> unique() async {
-    var collection = await _box._collectionFor<T>(_type);
+    var collection = await box._collectionFor<T>(_type);
     var document = await collection.findOne(_selector);
-    return _box._toEntity<T>(document, _type);
+    return box._toEntity<T>(document, _type);
   }
 }
 
@@ -188,7 +207,7 @@ class _WhereStep<T> implements WhereStep<T> {
   final String field;
   final _QueryStep<T> query;
 
-  _WhereStep(String field, this.query) : field = _translate(field, query._type);
+  _WhereStep(String field, this.query) : field = _translate(field, query._type, query.box.registry);
 
   Map<String, dynamic> combine(Map<String, dynamic> selector) => selector;
 
@@ -219,8 +238,8 @@ class _WhereStep<T> implements WhereStep<T> {
   @override
   QueryStep<T> between(dynamic value1, dynamic value2) => _queryStep({r'$gt': value1, r'$lt': value2});
 
-  static _translate(String field, Type type) =>
-      !field.contains('.') && TypeReflection(type).field(field).metadata(Key).isNotEmpty ? '_id' : field;
+  static String _translate(String field, Type type, Registry registry) =>
+      !field.contains('.') && registry.lookup(type).isKey(field) ? '_id' : field;
 }
 
 class _NotStep<T> extends _WhereStep<T> {
@@ -230,107 +249,32 @@ class _NotStep<T> extends _WhereStep<T> {
   Map<String, dynamic> combine(Map<String, dynamic> selector) => selector.map((k, v) => MapEntry(k, {r'$not': v}));
 }
 
-var objectIdPattern = new RegExp(r'^[0-9a-fA-F]+$');
-
-class _ObjectToDocument extends ConverterBase<Object, Map<String, dynamic>> {
-  _ObjectToDocument() : super(TypeReflection<Object>(), TypeReflection<Map<String, dynamic>>());
-
-  Map<String, dynamic> convertTo(Object object, TypeReflection targetReflection) {
-    return _convert(object);
-  }
-
-  dynamic _convert(object) {
-    if (object == null || object is String || object is num || object is bool || object is DateTime) {
-      return object;
-    } else if (object is Iterable) {
-      return List.from(object.map((item) => _convert(item)));
-    } else if (object is Map) {
-      Map map = <String, dynamic>{};
-      object.keys.forEach((k) => map[k.toString()] = _convert(object[k]));
-      return map;
-    } else {
-      TypeReflection type = TypeReflection.fromInstance(object);
-      var ids = type.fields.values
-          .where((field) => field.has(Key))
-          .map((field) => {field.name: _toId(field.value(object))})
-          .toList();
-      var fields = type.fields.values.where((field) => !field.has(Transient) && !field.has(Key)).map((field) {
-        return {field.name: _convert(field.value(object))};
-      }).toList();
-      if (ids.length == 1) {
-        fields.add({'_id': ids[0].values.first});
-      } else {
-        fields.add({'_id': ids.reduce((Map m1, Map m2) => m2..addAll(m1))});
-      }
-      return fields.reduce((Map m1, Map m2) => m2..addAll(m1));
-    }
-  }
-}
-
-class _DocumentToObject extends ConverterBase<Map<String, dynamic>, Object> {
-  _DocumentToObject() : super(TypeReflection<Map<String, dynamic>>(), TypeReflection<Object>());
-
-  Object convertTo(Map<String, dynamic> document, TypeReflection targetReflection) {
-    if (document != null && document.containsKey(r'$err')) {
-      throw MongoDbError(document[r'$err']);
-    }
-    return _convert(document, targetReflection);
-  }
-
-  _convert(object, TypeReflection targetReflection) {
-    if (object == null) {
-      return null;
-    } else if (object is Map) {
-      if (targetReflection.sameOrSuper(Map)) {
-        TypeReflection keyType = targetReflection.typeArguments[0];
-        TypeReflection valueType = targetReflection.typeArguments[1];
-        Map map = {};
-        object.keys.forEach((k) {
-          var newKey = keyType.sameOrSuper(k) ? k : keyType.construct(args: [k]);
-          map[newKey] = _convert(object[k], valueType);
-        });
-        return map;
-      } else {
-        var instance = targetReflection.construct();
-        object.keys.forEach((k) {
-          if (k != '_id' && targetReflection.fields[k] == null)
-            throw JsonException('Unknown property: ' + targetReflection.name + '.' + k);
-        });
-        var multipleKeys = targetReflection.fields.values.where((field) => field.has(Key)).length > 1;
-        Maps.forEach(targetReflection.fields, (name, field) {
-          if (field.has(Key)) {
-            if (multipleKeys) {
-              field.set(instance, _parseId(object['_id'][name]));
-            } else {
-              field.set(instance, _parseId(object['_id']));
-            }
-          } else {
-            field.set(instance, _convert(object[name], field.type));
-          }
-        });
-        return instance;
-      }
-    } else if (object is Iterable) {
-      var iterable = targetReflection.construct();
-      var itemType = targetReflection.typeArguments[0];
-      object.forEach((i) => iterable.add(_convert(i, itemType)));
-      return iterable;
-    } else {
-      return object;
-    }
-  }
-}
+var objectIdPattern = RegExp(r'^[0-9a-fA-F]+$');
 
 class MongoDbError extends Error {
   String message;
 
   MongoDbError(this.message);
 
+  @override
   String toString() => message;
 }
 
-dynamic _toId(dynamic value) => value is String && objectIdPattern.hasMatch(value)
-    ? ObjectId.fromHexString(value)
-    : value is String || value is num || value is DateTime || value is bool ? value : Conversion.convert(value).to(Map);
-
-dynamic _parseId(dynamic value) => value is ObjectId ? value.toHexString() : value;
+dynamic _toId(dynamic value) {
+  if (value is String && objectIdPattern.hasMatch(value)) {
+    return ObjectId.fromHexString(value);
+  }
+  if (value is String || value is num || value is bool) {
+    return value;
+  }
+  if (value is DateTime) {
+    return value.toIso8601String();
+  }
+  if (value is Map) {
+    return Map<String, dynamic>.from(value.map((k, v) => MapEntry(k, _toId(v))));
+  }
+  if (value is List) {
+    return List.from(value.map((e) => _toId(e)));
+  }
+  return value?.toString();
+}

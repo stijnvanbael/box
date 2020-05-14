@@ -1,35 +1,32 @@
+library box.memory;
+
 import 'package:box/box.dart';
-import 'package:reflective/reflective.dart';
 
 class MemoryBox extends Box {
   final Map<String, Map> entities = {};
 
-  MemoryBox() {
-    Converters.add(_ObjectToMap());
-    Converters.add(_MapToObject());
-  }
+  MemoryBox(Registry registry) : super(registry);
 
   @override
   bool get persistent => false;
 
   @override
   Future store(Object entity) {
-    TypeReflection type = TypeReflection.fromInstance(entity);
-    return entitiesFor(type).then((entities) {
-      entities[Box.keyOf(entity)] = entity;
+    return entitiesFor(entity.runtimeType).then((entities) {
+      entities[keyOf(entity)] = entity;
     });
   }
 
   @override
   Future<T> find<T>(key, [Type type]) async {
-    return entitiesFor(TypeReflection<T>(type)).then((entitiesForType) {
+    return entitiesFor(type ?? T).then((entitiesForType) {
       return entitiesForType != null ? entitiesForType[key is Map ? Composite(key) : key] : null;
     });
   }
 
-  Stream<T> _query<T>(TypeReflection<T> type, Predicate predicate, _Ordering ordering) {
+  Stream<T> _query<T>(Type type, Predicate predicate, _Ordering ordering) {
     return Stream.fromFuture(entitiesFor(type).then((entities) {
-      List<T> list = List.from(entities.values.where((item) => predicate != null ? predicate.evaluate(item) : true));
+      var list = List<T>.from(entities.values.where((item) => predicate != null ? predicate.evaluate(item) : true));
       if (ordering != null) list.sort((object1, object2) => ordering.compare(object1, object2));
       return list;
     })).expand((list) => list);
@@ -43,14 +40,15 @@ class MemoryBox extends Box {
     return _QueryStep<T>(this, type);
   }
 
-  Future<Map> entitiesFor(TypeReflection type) {
-    entities.putIfAbsent(type.name, () => Map());
-    return Future.value(entities[type.name]);
+  Future<Map> entitiesFor(Type type) {
+    var entitySupport = registry.lookup(type);
+    entities.putIfAbsent(entitySupport.name, () => {});
+    return Future.value(entities[entitySupport.name]);
   }
 
   @override
   Future deleteAll<T>([Type type]) async {
-    return (await entitiesFor(TypeReflection<T>(type))).clear();
+    return (await entitiesFor(T ?? type)).clear();
   }
 
   @override
@@ -64,7 +62,7 @@ class _SelectStep implements SelectStep {
   _SelectStep(this._box, this._fields);
 
   @override
-  from(Type type) => _QueryStep(_box, type, _fields);
+  _QueryStep from(Type type) => _QueryStep(_box, type, _fields);
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
@@ -101,6 +99,7 @@ class _AndStep<T> extends _WhereStep<T> {
 }
 
 class _ExpectationStep<T> extends ExpectationStep<T> {
+  @override
   final MemoryBox box;
   final Predicate<T> predicate;
   final _Ordering<T> ordering;
@@ -111,7 +110,7 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
 
   @override
   Stream<T> stream({int limit = 1000000, int offset = 0}) {
-    return box._query(TypeReflection<T>(_type), predicate, ordering).skip(offset).take(limit).map(_selectFields);
+    return box._query(_type, predicate, ordering).skip(offset).take(limit).map(_selectFields);
   }
 
   @override
@@ -125,12 +124,7 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
     if (selectFields == null) {
       return record;
     }
-    var reflection = TypeReflection<T>(_type);
-    return Map.fromIterable(
-      selectFields,
-      key: (field) => field.alias,
-      value: (field) => reflection.field(field.name).value(record),
-    ) as T;
+    return {for (var field in selectFields) field.alias: box.registry.getFieldValue(field.name, record)} as T;
   }
 }
 
@@ -144,34 +138,34 @@ class _WhereStep<T> implements WhereStep<T> {
   WhereStep<T> not() => _NotStep<T>(this);
 
   @override
-  QueryStep<T> like(String expression) =>
-      _QueryStep.withPredicate(query, combine(_LikePredicate(query.type, field, expression)), query._type);
+  QueryStep<T> like(String expression) => _QueryStep.withPredicate(
+      query, combine(_LikePredicate(query.type, field, expression, query.box.registry)), query._type);
 
   @override
-  QueryStep<T> equals(dynamic value) =>
-      _QueryStep.withPredicate(query, combine(_EqualsPredicate(query.type, field, value)), query._type);
+  QueryStep<T> equals(dynamic value) => _QueryStep.withPredicate(
+      query, combine(_EqualsPredicate(query.type, field, value, query.box.registry)), query._type);
 
   Predicate<T> combine(Predicate<T> predicate) => predicate;
 
   @override
-  QueryStep<T> gt(dynamic value) =>
-      _QueryStep.withPredicate(query, combine(_GreaterThanPredicate(query.type, field, value)), query._type);
+  QueryStep<T> gt(dynamic value) => _QueryStep.withPredicate(
+      query, combine(_GreaterThanPredicate(query.type, field, value, query.box.registry)), query._type);
 
   @override
-  QueryStep<T> gte(dynamic value) =>
-      _QueryStep.withPredicate(query, combine(_GreaterThanOrEqualsPredicate(query.type, field, value)), query._type);
+  QueryStep<T> gte(dynamic value) => _QueryStep.withPredicate(
+      query, combine(_GreaterThanOrEqualsPredicate(query.type, field, value, query.box.registry)), query._type);
 
   @override
-  QueryStep<T> lt(dynamic value) =>
-      _QueryStep.withPredicate(query, combine(_LessThanPredicate(query.type, field, value)), query._type);
+  QueryStep<T> lt(dynamic value) => _QueryStep.withPredicate(
+      query, combine(_LessThanPredicate(query.type, field, value, query.box.registry)), query._type);
 
   @override
-  QueryStep<T> lte(dynamic value) =>
-      _QueryStep.withPredicate(query, combine(_LessThanOrEqualsPredicate(query.type, field, value)), query._type);
+  QueryStep<T> lte(dynamic value) => _QueryStep.withPredicate(
+      query, combine(_LessThanOrEqualsPredicate(query.type, field, value, query.box.registry)), query._type);
 
   @override
-  QueryStep<T> between(dynamic value1, dynamic value2) =>
-      _QueryStep.withPredicate(query, combine(_BetweenPredicate(query.type, field, value1, value2)), query._type);
+  QueryStep<T> between(dynamic value1, dynamic value2) => _QueryStep.withPredicate(
+      query, combine(_BetweenPredicate(query.type, field, value1, value2, query.box.registry)), query._type);
 }
 
 class _NotStep<T> extends _WhereStep<T> {
@@ -188,16 +182,16 @@ class _OrderByStep<T> implements OrderByStep<T> {
   _OrderByStep(this.field, this.query);
 
   @override
-  ExpectationStep<T> ascending() =>
-      _ExpectationStep(query.box, query.type, query.selectFields, query.predicate, _Ascending(query.type, field));
+  ExpectationStep<T> ascending() => _ExpectationStep(
+      query.box, query.type, query.selectFields, query.predicate, _Ascending(query.type, field, query.box.registry));
 
   @override
-  ExpectationStep<T> descending() =>
-      _ExpectationStep(query.box, query.type, query.selectFields, query.predicate, _Descending(query.type, field));
+  ExpectationStep<T> descending() => _ExpectationStep(
+      query.box, query.type, query.selectFields, query.predicate, _Descending(query.type, field, query.box.registry));
 }
 
 class _Ascending<T> extends _Ordering<T> {
-  _Ascending(Type type, String field) : super(type, field);
+  _Ascending(Type type, String field, Registry registry) : super(type, field, registry);
 
   @override
   int compare(T object1, T object2) {
@@ -208,7 +202,7 @@ class _Ascending<T> extends _Ordering<T> {
 }
 
 class _Descending<T> extends _Ordering<T> {
-  _Descending(Type type, String field) : super(type, field);
+  _Descending(Type type, String field, Registry registry) : super(type, field, registry);
 
   @override
   int compare(T object1, T object2) {
@@ -221,26 +215,18 @@ class _Descending<T> extends _Ordering<T> {
 abstract class _Ordering<T> {
   final Type type;
   final String field;
-  FieldReflection fieldReflection;
+  final Registry registry;
 
-  _Ordering(this.type, this.field) {
-    TypeReflection typeReflection = TypeReflection(type);
-    this.fieldReflection = typeReflection.field(field);
-    if (fieldReflection == null) {
-      throw Exception('Field not found: $typeReflection.' + field);
-    }
-  }
+  _Ordering(this.type, this.field, this.registry);
 
   int compare(T object1, T object2);
 
-  valueOf(T object) {
-    return fieldReflection.value(object);
-  }
+  dynamic valueOf(T object) => registry.getFieldValue(field, object);
 }
 
 class _LikePredicate<T> extends _ExpressionPredicate<T, RegExp> {
-  _LikePredicate(Type type, String field, String expression)
-      : super(type, field, RegExp(expression.replaceAll('%', '.*'), caseSensitive: false));
+  _LikePredicate(Type type, String field, String expression, Registry registry)
+      : super(type, field, RegExp(expression.replaceAll('%', '.*'), caseSensitive: false), registry);
 
   @override
   bool evaluate(T object) {
@@ -250,7 +236,8 @@ class _LikePredicate<T> extends _ExpressionPredicate<T, RegExp> {
 }
 
 class _EqualsPredicate<T> extends _ExpressionPredicate<T, String> {
-  _EqualsPredicate(Type type, String field, String expression) : super(type, field, expression);
+  _EqualsPredicate(Type type, String field, String expression, Registry registry)
+      : super(type, field, expression, registry);
 
   @override
   bool evaluate(T object) {
@@ -260,7 +247,8 @@ class _EqualsPredicate<T> extends _ExpressionPredicate<T, String> {
 }
 
 abstract class _ComparingPredicate<T> extends _ExpressionPredicate<T, dynamic> {
-  _ComparingPredicate(Type type, String field, dynamic expression) : super(type, field, expression);
+  _ComparingPredicate(Type type, String field, dynamic expression, Registry registry)
+      : super(type, field, expression, registry);
 
   @override
   bool evaluate(T object) {
@@ -278,28 +266,32 @@ abstract class _ComparingPredicate<T> extends _ExpressionPredicate<T, dynamic> {
 }
 
 class _GreaterThanPredicate<T> extends _ComparingPredicate<T> {
-  _GreaterThanPredicate(Type type, String field, dynamic expression) : super(type, field, expression);
+  _GreaterThanPredicate(Type type, String field, dynamic expression, Registry registry)
+      : super(type, field, expression, registry);
 
   @override
   bool compare(int value) => value > 0;
 }
 
 class _GreaterThanOrEqualsPredicate<T> extends _ComparingPredicate<T> {
-  _GreaterThanOrEqualsPredicate(Type type, String field, dynamic expression) : super(type, field, expression);
+  _GreaterThanOrEqualsPredicate(Type type, String field, dynamic expression, Registry registry)
+      : super(type, field, expression, registry);
 
   @override
   bool compare(int value) => value >= 0;
 }
 
 class _LessThanPredicate<T> extends _ComparingPredicate<T> {
-  _LessThanPredicate(Type type, String field, dynamic expression) : super(type, field, expression);
+  _LessThanPredicate(Type type, String field, dynamic expression, Registry registry)
+      : super(type, field, expression, registry);
 
   @override
   bool compare(int value) => value < 0;
 }
 
 class _LessThanOrEqualsPredicate<T> extends _ComparingPredicate<T> {
-  _LessThanOrEqualsPredicate(Type type, String field, dynamic expression) : super(type, field, expression);
+  _LessThanOrEqualsPredicate(Type type, String field, dynamic expression, Registry registry)
+      : super(type, field, expression, registry);
 
   @override
   bool compare(int value) => value <= 0;
@@ -309,106 +301,21 @@ class _BetweenPredicate<T> extends Predicate<T> {
   final Predicate<T> _lowerBound;
   final Predicate<T> _upperBound;
 
-  _BetweenPredicate(Type type, String field, dynamic value1, dynamic value2)
-      : _lowerBound = _GreaterThanPredicate(type, field, value1),
-        _upperBound = _LessThanPredicate(type, field, value2);
+  _BetweenPredicate(Type type, String field, dynamic value1, dynamic value2, Registry registry)
+      : _lowerBound = _GreaterThanPredicate(type, field, value1, registry),
+        _upperBound = _LessThanPredicate(type, field, value2, registry);
 
   @override
   bool evaluate(T object) => _lowerBound.evaluate(object) && _upperBound.evaluate(object);
 }
 
 abstract class _ExpressionPredicate<T, E> extends Predicate<T> {
-  Type type;
-  String field;
-  E expression;
+  final Type type;
+  final String field;
+  final E expression;
+  final Registry registry;
 
-  _ExpressionPredicate(this.type, this.field, this.expression);
+  _ExpressionPredicate(this.type, this.field, this.expression, this.registry);
 
-  valueOf(T object) {
-    var typeReflection = TypeReflection(type);
-    dynamic currentValue = object;
-    for (var subField in field.split('.')) {
-      var fieldReflection = typeReflection.field(subField);
-      if (fieldReflection == null) {
-        throw Exception('Field not found: $typeReflection.$subField');
-      }
-      currentValue = fieldReflection.value(currentValue);
-      if (currentValue == null) {
-        return null;
-      }
-      typeReflection = TypeReflection.fromInstance(currentValue);
-    }
-    return currentValue;
-  }
-}
-
-class _ObjectToMap extends ConverterBase<Object, Map> {
-  _ObjectToMap() : super(TypeReflection(Object), TypeReflection<Map>());
-
-  Map convertTo(Object object, TypeReflection targetReflection) {
-    return _convert(object);
-  }
-
-  dynamic _convert(dynamic object) {
-    if (object is DateTime) {
-      return object.toString();
-    } else if (object == null || object is String || object is num || object is bool) {
-      return object;
-    } else if (object is Iterable) {
-      return List.from(object.map((item) => _convert(item)));
-    } else if (object is Map) {
-      Map map = {};
-      object.keys.forEach((k) => map[k.toString()] = _convert(object[k]));
-      return map;
-    } else {
-      TypeReflection type = TypeReflection.fromInstance(object);
-      return type.fields.values
-          .where((field) => !field.has(Transient))
-          .map((field) => {field.name: _convert(field.value(object))})
-          .reduce((Map m1, Map m2) {
-        m2.addAll(m1);
-        return m2;
-      });
-    }
-  }
-}
-
-class _MapToObject extends ConverterBase<Map, Object> {
-  _MapToObject() : super(TypeReflection<Map>(), TypeReflection(Object));
-
-  Object convertTo(Map map, TypeReflection targetReflection) {
-    return _convert(map, targetReflection);
-  }
-
-  _convert(dynamic object, TypeReflection targetReflection) {
-    if (object is Map) {
-      if (targetReflection.sameOrSuper(Map)) {
-        TypeReflection keyType = targetReflection.typeArguments[0];
-        TypeReflection valueType = targetReflection.typeArguments[1];
-        Map map = {};
-        object.keys.forEach((k) {
-          var newKey = keyType.sameOrSuper(k) ? k : keyType.construct(args: [k]);
-          map[newKey] = _convert(object[k], valueType);
-        });
-        return map;
-      } else {
-        var instance = targetReflection.construct();
-        object.keys.forEach((k) {
-          if (targetReflection.fields[k] == null)
-            throw JsonException('Unknown property: ' + targetReflection.name + '.' + k);
-        });
-        Maps.forEach(targetReflection.fields, (name, field) => field.set(instance, _convert(object[name], field.type)));
-        return instance;
-      }
-    } else if (object is Iterable) {
-      var iterable = targetReflection.construct();
-      var itemType = targetReflection.typeArguments[0];
-      object.forEach((i) => iterable.add(_convert(i, itemType)));
-      return iterable;
-    } else if (targetReflection.sameOrSuper(DateTime)) {
-      return object != null ? DateTime.parse(object) : null;
-    } else {
-      return object;
-    }
-  }
+  dynamic valueOf(T object) => registry.getFieldValue(field, object);
 }
