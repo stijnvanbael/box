@@ -1,6 +1,6 @@
 0.2.4
 -----
-* [ ] Removed dependency on mirrors at runtime
+* [x] Removed dependency on mirrors at runtime
 * [ ] Firestore support
 
 0.2.3
