@@ -200,7 +200,6 @@ abstract class EntitySupport<T> {
   dynamic getFieldValue(String fieldName, T entity) {
     var fieldAccessor = _fieldAccessors[fieldName];
     if(fieldAccessor == null) {
-      // TODO: transitive fields
       throw 'No such field "$fieldName" on entity $name';
     }
     return fieldAccessor(entity);
