@@ -28,6 +28,14 @@ abstract class Box {
   Future deleteAll<T>([Type type]);
 
   Future close();
+
+  bool get compositeKeySupported => true;
+
+  bool get likeSupported => true;
+
+  bool get notSupported => true;
+
+  bool get orSupported => true;
 }
 
 abstract class SelectStep {
@@ -199,7 +207,7 @@ abstract class EntitySupport<T> {
 
   dynamic getFieldValue(String fieldName, T entity) {
     var fieldAccessor = _fieldAccessors[fieldName];
-    if(fieldAccessor == null) {
+    if (fieldAccessor == null) {
       throw 'No such field "$fieldName" on entity $name';
     }
     return fieldAccessor(entity);

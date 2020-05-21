@@ -1,7 +1,7 @@
 0.2.4
 -----
 * [x] Removed dependency on mirrors at runtime
-* [ ] Firestore support
+* [x] Firestore support
 
 0.2.3
 -----
@@ -25,3 +25,5 @@ Backlog
 * [ ] SQLite support
 * [ ] Group by
 * [ ] Join
+* [ ] IN operator
+* [ ] CONTAINS operator (for arrays)

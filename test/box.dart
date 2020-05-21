@@ -1,20 +1,24 @@
 import 'package:box/box.dart';
+import 'package:box/firestore.dart';
 import 'package:box/mongodb.dart';
 import 'package:collection/collection.dart';
 import 'package:test/test.dart';
 
 part 'box.g.dart';
 
-void main() {
-  var registry = initBoxRegistry();
-  runTests('Memory', () => MemoryBox(registry));
-  runTests('File', () => FileBox('.box/test', registry));
-  runTests('MongoDB', () => MongoDbBox('localhost', registry, database: 'test'));
+var registry = initBoxRegistry();
+var firestore = FirestoreBox('.secrets/firestore.json', registry);
+
+void main() async {
+  await runTests('Memory', () => MemoryBox(registry));
+  await runTests('File', () => FileBox('.box/test', registry));
+  await runTests('MongoDB', () => MongoDbBox('localhost', registry, database: 'test'));
+  await runTests('Firestore', () => firestore);
 }
 
-void runTests(String name, Box Function() boxBuilder) {
+void runTests(String name, Box Function() boxBuilder) async {
   Future<Box> reconnectIfPersistent(Box box) async {
-    if (box.persistent) {
+    if (box != firestore && box.persistent) {
       await box.close();
       return boxBuilder();
     }
@@ -23,15 +27,16 @@ void runTests(String name, Box Function() boxBuilder) {
 
   var john = User(id: 'jdoe', name: 'John Doe');
 
-  setUp(() async {
+  Future<Box> setUp() async {
     var box = boxBuilder();
     await box.deleteAll<User>();
     await box.deleteAll<Post>();
-  });
+    return box;
+  }
 
   group('$name - Find by key', () {
     test('Find by single key', () async {
-      var box = boxBuilder();
+      var box = await setUp();
       expect(await box.find<User>('jdoe'), isNull);
 
       var user = john;
@@ -42,7 +47,7 @@ void runTests(String name, Box Function() boxBuilder) {
     });
 
     test('Find by composite key', () async {
-      var box = boxBuilder();
+      var box = await setUp();
       await box.deleteAll<Post>();
       var user = john;
       var timestamp = DateTime.parse('2014-12-11T10:09:08Z');
@@ -58,7 +63,7 @@ void runTests(String name, Box Function() boxBuilder) {
       box = await reconnectIfPersistent(box);
       var found = await box.find<Post>({'userId': user.id, 'timestamp': timestamp});
       expect(found, equals(post));
-    });
+    }, skip: !boxBuilder().compositeKeySupported);
   });
 
   group('$name - Predicates', () {
@@ -68,7 +73,7 @@ void runTests(String name, Box Function() boxBuilder) {
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var koneil = User(id: 'koneil', name: 'Kendall Oneil');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
@@ -81,13 +86,13 @@ void runTests(String name, Box Function() boxBuilder) {
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var koneil = User(id: 'koneil', name: 'Kendall Oneil');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
       expect(await box.selectFrom<User>().where('name').like('C%').orderBy('name').ascending().list(),
           equals([crollis, cstone]));
-    });
+    }, skip: !boxBuilder().likeSupported);
 
     test('gt predicate', () async {
       var jdoe = john;
@@ -95,7 +100,7 @@ void runTests(String name, Box Function() boxBuilder) {
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var koneil = User(id: 'koneil', name: 'Kendall Oneil');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
@@ -109,7 +114,7 @@ void runTests(String name, Box Function() boxBuilder) {
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var koneil = User(id: 'koneil', name: 'Kendall Oneil');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
@@ -123,7 +128,7 @@ void runTests(String name, Box Function() boxBuilder) {
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var koneil = User(id: 'koneil', name: 'Kendall Oneil');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
@@ -131,13 +136,13 @@ void runTests(String name, Box Function() boxBuilder) {
           equals([crollis, cstone]));
     });
 
-    test('gte predicate', () async {
+    test('lte predicate', () async {
       var jdoe = john;
       var crollis = User(id: 'crollis', name: 'Christine Rollis');
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var koneil = User(id: 'koneil', name: 'Kendall Oneil');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
@@ -151,7 +156,7 @@ void runTests(String name, Box Function() boxBuilder) {
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var koneil = User(id: 'koneil', name: 'Kendall Oneil');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
@@ -167,11 +172,12 @@ void runTests(String name, Box Function() boxBuilder) {
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var koneil = User(id: 'koneil', name: 'Kendall Oneil');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
-      expect(await box.selectFrom<User>().where('name').like('C%').and('name').like('%Stone').list(), equals([cstone]));
+      expect(await box.selectFrom<User>().where('id').equals('cstone').and('name').equals('Cora Stone').list(),
+          equals([cstone]));
     });
 
     test('OR', () async {
@@ -180,7 +186,7 @@ void runTests(String name, Box Function() boxBuilder) {
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var koneil = User(id: 'koneil', name: 'Kendall Oneil');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
@@ -188,14 +194,14 @@ void runTests(String name, Box Function() boxBuilder) {
           await box
               .selectFrom<User>()
               .where('name')
-              .like('Cora%')
+              .equals('Cora Stone')
               .or('name')
-              .like('%Snow')
+              .equals('Donovan Snow')
               .orderBy('name')
               .ascending()
               .list(),
           equals([cstone, dsnow]));
-    });
+    }, skip: !boxBuilder().orSupported);
 
     test('NOT, descending', () async {
       var jdoe = john;
@@ -203,14 +209,14 @@ void runTests(String name, Box Function() boxBuilder) {
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var koneil = User(id: 'koneil', name: 'Kendall Oneil');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
       expect(
           await box.selectFrom<User>().where('name').not().equals('Donovan Snow').orderBy('name').descending().list(),
           equals([koneil, jdoe, cstone, crollis]));
-    });
+    }, skip: !boxBuilder().notSupported);
   });
 
   group('$name - Deep queries', () {
@@ -229,12 +235,12 @@ void runTests(String name, Box Function() boxBuilder) {
           id: 'koneil',
           name: 'Kendall Oneil',
           lastPost: Post(text: 'Has anyone seen my dog?', keywords: ['dog', 'lost']));
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
-      expect(await box.selectFrom<User>().where('lastPost.text').like('%dart%').orderBy('name').ascending().list(),
-          equals([crollis, dsnow]));
+      expect(
+          await box.selectFrom<User>().where('lastPost.text').equals('Dart 2.6.1 is out!').list(), equals([crollis]));
     });
   });
 
@@ -245,7 +251,7 @@ void runTests(String name, Box Function() boxBuilder) {
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var koneil = User(id: 'koneil', name: 'Kendall Oneil');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
@@ -257,7 +263,7 @@ void runTests(String name, Box Function() boxBuilder) {
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
       var koneil = User(id: 'koneil', name: 'Kendall Oneil');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
@@ -270,7 +276,7 @@ void runTests(String name, Box Function() boxBuilder) {
       var crollis = User(id: 'crollis', name: 'Christine Rollis');
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([crollis, cstone, dsnow]);
 
       box = await reconnectIfPersistent(box);
@@ -281,7 +287,7 @@ void runTests(String name, Box Function() boxBuilder) {
       var crollis = User(id: 'crollis', name: 'Christine Rollis');
       var cstone = User(id: 'cstone', name: 'Cora Stone');
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([crollis, cstone, dsnow]);
 
       box = await reconnectIfPersistent(box);
@@ -294,7 +300,7 @@ void runTests(String name, Box Function() boxBuilder) {
       var crollis = User(id: 'crollis', name: 'Christine Rollis', lastPost: Post(text: 'Bye!'));
       var cstone = User(id: 'cstone', name: 'Cora Stone', lastPost: Post(text: 'Signing off'));
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow', lastPost: Post(text: 'Hi!'));
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([crollis, cstone, dsnow]);
 
       box = await reconnectIfPersistent(box);
@@ -313,7 +319,7 @@ void runTests(String name, Box Function() boxBuilder) {
       var crollis = User(id: 'crollis', name: 'Christine Rollis', lastPost: Post(text: 'Bye!'));
       var cstone = User(id: 'cstone', name: 'Cora Stone', lastPost: Post(text: 'Signing off'));
       var dsnow = User(id: 'dsnow', name: 'Donovan Snow', lastPost: Post(text: 'Hi!'));
-      var box = boxBuilder();
+      var box = await setUp();
       await box.storeAll([crollis, cstone, dsnow]);
 
       box = await reconnectIfPersistent(box);
@@ -376,7 +382,7 @@ class User {
         );
 
   @override
-  String toString() => '@' + id + ' (' + name + ')';
+  String toString() => '@$id ($name)';
 
   @override
   int get hashCode => id.hashCode ^ name.hashCode;

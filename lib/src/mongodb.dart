@@ -112,9 +112,7 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
       : super(query.box, query._selector, query._order..addAll(order), query._type, query._selectFields);
 
   @override
-  OrderByStep<T> orderBy(String field) {
-    return _OrderByStep(field, this);
-  }
+  OrderByStep<T> orderBy(String field) => _OrderByStep(field, this);
 
   @override
   WhereStep<T> where(String field) => _WhereStep(field, this);

@@ -10,6 +10,8 @@ dependencies:
   collection: ^1.14.11
   mongo_dart: ^0.4.0
   inflection2: ^0.4.2
+  googleapis_auth: ^0.2.11
+  http: ^0.12.1
 dev_dependencies:
   test: ^1.6.0
   build_runner: ^1.10.0
