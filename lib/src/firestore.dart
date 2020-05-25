@@ -89,6 +89,9 @@ class FirestoreBox extends Box {
 
   @override
   bool get orSupported => false;
+
+  @override
+  bool get oneOfSupported => false;
 }
 
 class _SelectStep implements SelectStep {
@@ -153,6 +156,19 @@ class _WhereStep<T> implements WhereStep<T> {
   @override
   QueryStep<T> lte(dynamic value) => _fieldFilter('LESS_THAN_OR_EQUAL', value);
 
+  @override
+  QueryStep<T> oneOf(List<dynamic> values) {
+    throw UnimplementedError('OneOf is not supported');
+  }
+
+  @override
+  WhereStep<T> not() {
+    throw UnimplementedError('Not is not supported');
+  }
+
+  @override
+  QueryStep<T> contains(value) => _fieldFilter('ARRAY_CONTAINS', value);
+
   QueryStep<T> _fieldFilter(String operator, dynamic value) => _queryStep({
         'fieldFilter': {
           'field': {'fieldPath': field},
@@ -160,11 +176,6 @@ class _WhereStep<T> implements WhereStep<T> {
           'value': _wrap(value),
         },
       });
-
-  @override
-  WhereStep<T> not() {
-    throw UnimplementedError('Not is not supported');
-  }
 }
 
 class _OrStep<T> extends _WhereStep<T> {

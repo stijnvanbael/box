@@ -67,7 +67,7 @@ void runTests(String name, Box Function() boxBuilder) async {
   });
 
   group('$name - Predicates', () {
-    test('equals predicate, unique', () async {
+    test('= predicate, unique', () async {
       var jdoe = john;
       var crollis = User(id: 'crollis', name: 'Christine Rollis');
       var cstone = User(id: 'cstone', name: 'Cora Stone');
@@ -80,7 +80,7 @@ void runTests(String name, Box Function() boxBuilder) async {
       expect((await box.selectFrom<User>().where('name').equals('Cora Stone').unique()), equals(cstone));
     });
 
-    test('like predicate, list, order by', () async {
+    test('LIKE predicate, list, order by', () async {
       var jdoe = john;
       var crollis = User(id: 'crollis', name: 'Christine Rollis');
       var cstone = User(id: 'cstone', name: 'Cora Stone');
@@ -94,7 +94,7 @@ void runTests(String name, Box Function() boxBuilder) async {
           equals([crollis, cstone]));
     }, skip: !boxBuilder().likeSupported);
 
-    test('gt predicate', () async {
+    test('> predicate', () async {
       var jdoe = john;
       var crollis = User(id: 'crollis', name: 'Christine Rollis');
       var cstone = User(id: 'cstone', name: 'Cora Stone');
@@ -108,7 +108,7 @@ void runTests(String name, Box Function() boxBuilder) async {
           equals([dsnow, jdoe, koneil]));
     });
 
-    test('gte predicate', () async {
+    test('>= predicate', () async {
       var jdoe = john;
       var crollis = User(id: 'crollis', name: 'Christine Rollis');
       var cstone = User(id: 'cstone', name: 'Cora Stone');
@@ -122,7 +122,7 @@ void runTests(String name, Box Function() boxBuilder) async {
           equals([cstone, dsnow, jdoe, koneil]));
     });
 
-    test('lt predicate', () async {
+    test('< predicate', () async {
       var jdoe = john;
       var crollis = User(id: 'crollis', name: 'Christine Rollis');
       var cstone = User(id: 'cstone', name: 'Cora Stone');
@@ -136,7 +136,7 @@ void runTests(String name, Box Function() boxBuilder) async {
           equals([crollis, cstone]));
     });
 
-    test('lte predicate', () async {
+    test('<= predicate', () async {
       var jdoe = john;
       var crollis = User(id: 'crollis', name: 'Christine Rollis');
       var cstone = User(id: 'cstone', name: 'Cora Stone');
@@ -150,7 +150,7 @@ void runTests(String name, Box Function() boxBuilder) async {
           equals([crollis, cstone, dsnow]));
     });
 
-    test('between predicate', () async {
+    test('BETWEEN predicate', () async {
       var jdoe = john;
       var crollis = User(id: 'crollis', name: 'Christine Rollis');
       var cstone = User(id: 'cstone', name: 'Cora Stone');
@@ -162,6 +162,43 @@ void runTests(String name, Box Function() boxBuilder) async {
       box = await reconnectIfPersistent(box);
       expect((await box.selectFrom<User>().where('name').between('Ci', 'E').orderBy('name').ascending().list()),
           equals([cstone, dsnow]));
+    });
+
+    test('ONE OF predicate', () async {
+      var jdoe = john;
+      var crollis = User(id: 'crollis', name: 'Christine Rollis');
+      var cstone = User(id: 'cstone', name: 'Cora Stone');
+      var dsnow = User(id: 'dsnow', name: 'Donovan Snow');
+      var koneil = User(id: 'koneil', name: 'Kendall Oneil');
+      var box = await setUp();
+      await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
+
+      box = await reconnectIfPersistent(box);
+      expect((await box.selectFrom<User>().where('id').oneOf(['crollis', 'koneil']).orderBy('name').ascending().list()),
+          equals([crollis, koneil]));
+    }, skip: !boxBuilder().oneOfSupported);
+
+    test('CONTAINS predicate', () async {
+      var crollis =
+          User(id: 'crollis', name: 'Christine Rollis', lastPost: Post(text: 'Dart 2.6.1 is out!', keywords: ['dart']));
+      var cstone = User(
+          id: 'cstone',
+          name: 'Cora Stone',
+          lastPost: Post(text: 'Cupcakes are ready!', keywords: ['baking', 'cupcakes']));
+      var dsnow = User(
+          id: 'dsnow',
+          name: 'Donovan Snow',
+          lastPost: Post(text: 'I just discovered dart-box\nIt\'s awesome!', keywords: ['persistence', 'dart']));
+      var koneil = User(
+          id: 'koneil',
+          name: 'Kendall Oneil',
+          lastPost: Post(text: 'Has anyone seen my dog?', keywords: ['dog', 'lost']));
+      var box = await setUp();
+      await box.storeAll([crollis, cstone, dsnow, koneil]);
+
+      box = await reconnectIfPersistent(box);
+      expect((await box.selectFrom<User>().where('lastPost.keywords').contains('dart').orderBy('name').ascending().list()),
+          equals([crollis, dsnow]));
     });
   });
 

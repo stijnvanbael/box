@@ -238,6 +238,12 @@ class _WhereStep<T> implements WhereStep<T> {
 
   static String _translate(String field, Type type, Registry registry) =>
       !field.contains('.') && registry.lookup(type).isKey(field) ? '_id' : field;
+
+  @override
+  QueryStep<T> oneOf(List<dynamic> values) => _queryStep({r'$in': values});
+
+  @override
+  QueryStep<T> contains(dynamic value) => _queryStep({r'$all': [value]});
 }
 
 class _NotStep<T> extends _WhereStep<T> {

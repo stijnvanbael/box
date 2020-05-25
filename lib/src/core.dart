@@ -36,6 +36,8 @@ abstract class Box {
   bool get notSupported => true;
 
   bool get orSupported => true;
+
+  bool get oneOfSupported => true;
 }
 
 abstract class SelectStep {
@@ -68,6 +70,10 @@ abstract class WhereStep<T> {
   QueryStep<T> lte(dynamic value);
 
   QueryStep<T> between(dynamic value1, dynamic value2);
+
+  QueryStep<T> oneOf(List<dynamic> values);
+
+  QueryStep<T> contains(dynamic value);
 }
 
 abstract class OrderByStep<T> {

@@ -1,16 +1,21 @@
-0.2.4
------
+0.2.5 ONE OF & CONTAINS
+-----------------------
+* [x] ONE OF (IN) predicate
+* [x] CONTAINS predicate for arrays
+
+0.2.4 Firestore
+---------------
 * [x] Removed dependency on mirrors at runtime
 * [x] Firestore support
 
-0.2.3
------
+0.2.3 Limit & Offset
+--------------------
 * [x] Limit
 * [x] Offset
 * [x] Select and map result
 
-0.2.2
------
+0.2.2 MongoDB
+-------------
 * [x] MongoDB support
 * [x] Deep queries
 * [x] Greater than (or equal)
@@ -25,5 +30,4 @@ Backlog
 * [ ] SQLite support
 * [ ] Group by
 * [ ] Join
-* [ ] IN operator
-* [ ] CONTAINS operator (for arrays)
+* [ ] Emulate unsupported Firestore features

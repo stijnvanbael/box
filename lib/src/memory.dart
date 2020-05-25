@@ -134,38 +134,40 @@ class _WhereStep<T> implements WhereStep<T> {
 
   _WhereStep(this.field, this.query);
 
+  Predicate<T> combine(Predicate<T> predicate) => predicate;
+
   @override
   WhereStep<T> not() => _NotStep<T>(this);
 
   @override
-  QueryStep<T> like(String expression) => _QueryStep.withPredicate(
-      query, combine(_LikePredicate(query.type, field, expression, query.box.registry)), query._type);
+  QueryStep<T> like(String expression) => _queryStep(_LikePredicate(field, expression, query.box.registry));
 
   @override
-  QueryStep<T> equals(dynamic value) => _QueryStep.withPredicate(
-      query, combine(_EqualsPredicate(query.type, field, value, query.box.registry)), query._type);
-
-  Predicate<T> combine(Predicate<T> predicate) => predicate;
+  QueryStep<T> equals(dynamic value) => _queryStep(_EqualsPredicate(field, value, query.box.registry));
 
   @override
-  QueryStep<T> gt(dynamic value) => _QueryStep.withPredicate(
-      query, combine(_GreaterThanPredicate(query.type, field, value, query.box.registry)), query._type);
+  QueryStep<T> gt(dynamic value) => _queryStep(_GreaterThanPredicate(field, value, query.box.registry));
 
   @override
-  QueryStep<T> gte(dynamic value) => _QueryStep.withPredicate(
-      query, combine(_GreaterThanOrEqualsPredicate(query.type, field, value, query.box.registry)), query._type);
+  QueryStep<T> gte(dynamic value) => _queryStep(_GreaterThanOrEqualsPredicate(field, value, query.box.registry));
 
   @override
-  QueryStep<T> lt(dynamic value) => _QueryStep.withPredicate(
-      query, combine(_LessThanPredicate(query.type, field, value, query.box.registry)), query._type);
+  QueryStep<T> lt(dynamic value) => _queryStep(_LessThanPredicate(field, value, query.box.registry));
 
   @override
-  QueryStep<T> lte(dynamic value) => _QueryStep.withPredicate(
-      query, combine(_LessThanOrEqualsPredicate(query.type, field, value, query.box.registry)), query._type);
+  QueryStep<T> lte(dynamic value) => _queryStep(_LessThanOrEqualsPredicate(field, value, query.box.registry));
 
   @override
-  QueryStep<T> between(dynamic value1, dynamic value2) => _QueryStep.withPredicate(
-      query, combine(_BetweenPredicate(query.type, field, value1, value2, query.box.registry)), query._type);
+  QueryStep<T> between(dynamic value1, dynamic value2) =>
+      _queryStep(_BetweenPredicate(field, value1, value2, query.box.registry));
+
+  @override
+  QueryStep<T> oneOf(List<dynamic> values) => _queryStep(_OneOfPredicate(field, values, query.box.registry));
+
+  @override
+  QueryStep<T> contains(dynamic value) => _queryStep(_ContainsPredicate(field, value, query.box.registry));
+
+  QueryStep<T> _queryStep(Predicate<T> predicate) => _QueryStep.withPredicate(query, combine(predicate), query._type);
 }
 
 class _NotStep<T> extends _WhereStep<T> {
@@ -225,8 +227,8 @@ abstract class _Ordering<T> {
 }
 
 class _LikePredicate<T> extends _ExpressionPredicate<T, RegExp> {
-  _LikePredicate(Type type, String field, String expression, Registry registry)
-      : super(type, field, RegExp(expression.replaceAll('%', '.*'), caseSensitive: false), registry);
+  _LikePredicate(String field, String expression, Registry registry)
+      : super(field, RegExp(expression.replaceAll('%', '.*'), caseSensitive: false), registry);
 
   @override
   bool evaluate(T object) {
@@ -235,20 +237,18 @@ class _LikePredicate<T> extends _ExpressionPredicate<T, RegExp> {
   }
 }
 
-class _EqualsPredicate<T> extends _ExpressionPredicate<T, String> {
-  _EqualsPredicate(Type type, String field, String expression, Registry registry)
-      : super(type, field, expression, registry);
+class _EqualsPredicate<T, E> extends _ExpressionPredicate<T, E> {
+  _EqualsPredicate(String field, E expression, Registry registry) : super(field, expression, registry);
 
   @override
   bool evaluate(T object) {
     var value = valueOf(object);
-    return value != null && expression == value.toString();
+    return value != null && expression == value;
   }
 }
 
 abstract class _ComparingPredicate<T> extends _ExpressionPredicate<T, dynamic> {
-  _ComparingPredicate(Type type, String field, dynamic expression, Registry registry)
-      : super(type, field, expression, registry);
+  _ComparingPredicate(String field, dynamic expression, Registry registry) : super(field, expression, registry);
 
   @override
   bool evaluate(T object) {
@@ -266,32 +266,29 @@ abstract class _ComparingPredicate<T> extends _ExpressionPredicate<T, dynamic> {
 }
 
 class _GreaterThanPredicate<T> extends _ComparingPredicate<T> {
-  _GreaterThanPredicate(Type type, String field, dynamic expression, Registry registry)
-      : super(type, field, expression, registry);
+  _GreaterThanPredicate(String field, dynamic expression, Registry registry) : super(field, expression, registry);
 
   @override
   bool compare(int value) => value > 0;
 }
 
 class _GreaterThanOrEqualsPredicate<T> extends _ComparingPredicate<T> {
-  _GreaterThanOrEqualsPredicate(Type type, String field, dynamic expression, Registry registry)
-      : super(type, field, expression, registry);
+  _GreaterThanOrEqualsPredicate(String field, dynamic expression, Registry registry)
+      : super(field, expression, registry);
 
   @override
   bool compare(int value) => value >= 0;
 }
 
 class _LessThanPredicate<T> extends _ComparingPredicate<T> {
-  _LessThanPredicate(Type type, String field, dynamic expression, Registry registry)
-      : super(type, field, expression, registry);
+  _LessThanPredicate(String field, dynamic expression, Registry registry) : super(field, expression, registry);
 
   @override
   bool compare(int value) => value < 0;
 }
 
 class _LessThanOrEqualsPredicate<T> extends _ComparingPredicate<T> {
-  _LessThanOrEqualsPredicate(Type type, String field, dynamic expression, Registry registry)
-      : super(type, field, expression, registry);
+  _LessThanOrEqualsPredicate(String field, dynamic expression, Registry registry) : super(field, expression, registry);
 
   @override
   bool compare(int value) => value <= 0;
@@ -301,21 +298,40 @@ class _BetweenPredicate<T> extends Predicate<T> {
   final Predicate<T> _lowerBound;
   final Predicate<T> _upperBound;
 
-  _BetweenPredicate(Type type, String field, dynamic value1, dynamic value2, Registry registry)
-      : _lowerBound = _GreaterThanPredicate(type, field, value1, registry),
-        _upperBound = _LessThanPredicate(type, field, value2, registry);
+  _BetweenPredicate(String field, dynamic value1, dynamic value2, Registry registry)
+      : _lowerBound = _GreaterThanPredicate(field, value1, registry),
+        _upperBound = _LessThanPredicate(field, value2, registry);
 
   @override
   bool evaluate(T object) => _lowerBound.evaluate(object) && _upperBound.evaluate(object);
 }
 
+class _OneOfPredicate<T, E> extends _ExpressionPredicate<T, List<E>> {
+  _OneOfPredicate(String field, List<E> values, Registry registry) : super(field, values, registry);
+
+  @override
+  bool evaluate(T object) {
+    var value = valueOf(object);
+    return value != null && expression.contains(value.toString());
+  }
+}
+
+class _ContainsPredicate<T, E> extends _ExpressionPredicate<T, E> {
+  _ContainsPredicate(String field, E value, Registry registry) : super(field, value, registry);
+
+  @override
+  bool evaluate(T object) {
+    var value = valueOf(object);
+    return value != null && value.contains(expression);
+  }
+}
+
 abstract class _ExpressionPredicate<T, E> extends Predicate<T> {
-  final Type type;
   final String field;
   final E expression;
   final Registry registry;
 
-  _ExpressionPredicate(this.type, this.field, this.expression, this.registry);
+  _ExpressionPredicate(this.field, this.expression, this.registry);
 
   dynamic valueOf(T object) => registry.getFieldValue(field, object);
 }
