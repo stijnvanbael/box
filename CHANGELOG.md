@@ -1,3 +1,8 @@
+0.2.6 PostgreSQL & Join
+-----------------------
+* [ ] PostgreSQL support
+* [ ] Join
+
 0.2.5 ONE OF & CONTAINS
 -----------------------
 * [x] ONE OF (IN) predicate
@@ -25,9 +30,6 @@
 
 Backlog
 -------
-* [ ] PostgreSQL support
 * [ ] Automatic toJson and fromJson
 * [ ] SQLite support
-* [ ] Group by
-* [ ] Join
 * [ ] Emulate unsupported Firestore features
