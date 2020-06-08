@@ -1,6 +1,7 @@
 import 'package:box/box.dart';
 import 'package:box/firestore.dart';
 import 'package:box/mongodb.dart';
+import 'package:box/postgres.dart';
 import 'package:collection/collection.dart';
 import 'package:test/test.dart';
 
@@ -12,7 +13,8 @@ var firestore = FirestoreBox('.secrets/firestore.json', registry);
 void main() async {
   await runTests('Memory', () => MemoryBox(registry));
   await runTests('File', () => FileBox('.box/test', registry));
-  await runTests('MongoDB', () => MongoDbBox('localhost', registry, database: 'test'));
+  await runTests('MongoDB', () => MongoDbBox('localhost', registry, database: 'box_test'));
+  await runTests('PostgreSQL', () => PostgresBox('localhost', registry, database: 'box_test_json'));
   await runTests('Firestore', () => firestore);
 }
 
@@ -197,7 +199,8 @@ void runTests(String name, Box Function() boxBuilder) async {
       await box.storeAll([crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
-      expect((await box.selectFrom<User>().where('lastPost.keywords').contains('dart').orderBy('name').ascending().list()),
+      expect(
+          (await box.selectFrom<User>().where('lastPost.keywords').contains('dart').orderBy('name').ascending().list()),
           equals([crollis, dsnow]));
     });
   });
@@ -352,6 +355,7 @@ void runTests(String name, Box Function() boxBuilder) async {
             {'name': 'Christine Rollis', 'words': 'Bye!'}
           ]));
     });
+
     test('Convert result', () async {
       var crollis = User(id: 'crollis', name: 'Christine Rollis', lastPost: Post(text: 'Bye!'));
       var cstone = User(id: 'cstone', name: 'Cora Stone', lastPost: Post(text: 'Signing off'));
@@ -453,7 +457,9 @@ class Post {
   Post.fromJson(Map map)
       : this(
           userId: map['userId'],
-          timestamp: map['timestamp'] != null ? DateTime.parse(map['timestamp']) : null,
+          timestamp: map['timestamp'] != null
+              ? (map['timestamp'] is DateTime ? map['timestamp'] : DateTime.parse(map['timestamp']))
+              : null,
           text: map['text'],
           keywords: map['keywords'] != null ? List<String>.from(map['keywords']) : null,
         );
@@ -477,4 +483,9 @@ class Post {
         'text': text,
         'keywords': keywords,
       };
+
+  @override
+  String toString() {
+    return 'Post{userId: $userId, timestamp: $timestamp, text: $text, keywords: $keywords}';
+  }
 }

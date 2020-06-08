@@ -1,6 +1,6 @@
 0.2.6 PostgreSQL & Join
 -----------------------
-* [ ] PostgreSQL support
+* [x] PostgreSQL support
 * [ ] Join
 
 0.2.5 ONE OF & CONTAINS

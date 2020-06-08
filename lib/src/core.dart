@@ -91,7 +91,7 @@ abstract class ExpectationStep<T> {
 
   Future<List<T>> list({int limit = 1000000, int offset = 0}) async => stream(limit: limit, offset: offset).toList();
 
-  Future<T> unique();
+  Future<T> unique() => stream(limit: 1, offset: 0).first;
 
   Mapper<M> _typeMapper<M>() => (map) => box.registry.lookup<M>().deserialize(map);
 
@@ -190,6 +190,15 @@ class Field {
   final String alias;
 
   Field(this.name, this.alias);
+
+  dynamic resolve(Map<String, dynamic> map) {
+    var path = name.split('.');
+    dynamic result = map;
+    for (var part in path) {
+      result = result[part];
+    }
+    return result;
+  }
 }
 
 Field $(String name, {String alias}) => Field(name, alias ?? name);
@@ -202,10 +211,12 @@ abstract class EntitySupport<T> {
   final FieldAccessor<T> _keyAccessor;
   final Deserializer<T> _deserializer;
   final Map<String, FieldAccessor<T>> _fieldAccessors;
+  final Map<String, Type> fieldTypes;
   final List<String> keyFields;
   final String name;
 
-  EntitySupport(this.name, this._keyAccessor, this._deserializer, this._fieldAccessors, this.keyFields);
+  EntitySupport(
+      this.name, this._keyAccessor, this._deserializer, this._fieldAccessors, this.keyFields, this.fieldTypes);
 
   dynamic getKey(T entity) => _keyAccessor(entity);
 
@@ -220,6 +231,8 @@ abstract class EntitySupport<T> {
   }
 
   bool isKey(String field) => keyFields.contains(field);
+
+  List<String> get fields => _fieldAccessors.keys.toList();
 }
 
 class Registry {
