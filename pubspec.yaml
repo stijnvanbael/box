@@ -17,5 +17,4 @@ dev_dependencies:
   googleapis_auth: ^0.2.11
   http: ^0.12.1
   postgres: ^2.1.1
-  box_generator:
-    path: ../box_generator
+  box_generator: ^0.2.6
