@@ -1,7 +1,9 @@
 # Created by .ignore support plugin (hsz.mobi)
 pubspec.lock
 *.iml
+*.g.dart
 .box
 .packages
 .idea
+.secrets
 packages
