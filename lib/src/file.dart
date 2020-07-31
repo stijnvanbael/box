@@ -60,8 +60,13 @@ class FileBox extends MemoryBox {
     var file = _fileOf(entitySupport.name);
     return Stream.fromFuture(file.exists().then((exists) {
       if (exists) {
-        return file.openRead().transform(utf8.decoder).transform(const LineSplitter()).map((line) {
-          if (line.startsWith('{')) {
+        return file
+            .openRead()
+            .cast<List<int>>()
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())
+            .map((line) {
+          if (line.startsWith("{")) {
             return entitySupport.deserialize(jsonDecode(line));
           }
           return null;
