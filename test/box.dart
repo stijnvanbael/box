@@ -5,6 +5,8 @@ import 'package:box/postgres.dart';
 import 'package:collection/collection.dart';
 import 'package:test/test.dart';
 
+import 'joins.dart';
+
 part 'box.g.dart';
 
 var registry = initBoxRegistry();
@@ -166,7 +168,7 @@ void runTests(String name, Box Function() boxBuilder) async {
           equals([cstone, dsnow]));
     });
 
-    test('ONE OF predicate', () async {
+    test('IN predicate', () async {
       var jdoe = john;
       var crollis = User(id: 'crollis', name: 'Christine Rollis');
       var cstone = User(id: 'cstone', name: 'Cora Stone');
@@ -176,7 +178,7 @@ void runTests(String name, Box Function() boxBuilder) async {
       await box.storeAll([jdoe, crollis, cstone, dsnow, koneil]);
 
       box = await reconnectIfPersistent(box);
-      expect((await box.selectFrom<User>().where('id').oneOf(['crollis', 'koneil']).orderBy('name').ascending().list()),
+      expect((await box.selectFrom<User>().where('id').in_(['crollis', 'koneil']).orderBy('name').ascending().list()),
           equals([crollis, koneil]));
     }, skip: !boxBuilder().oneOfSupported);
 
@@ -379,6 +381,8 @@ void runTests(String name, Box Function() boxBuilder) async {
           ]));
     });
   });
+
+  joinTests(name, boxBuilder);
 }
 
 @entity

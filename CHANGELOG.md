@@ -30,6 +30,17 @@
 
 Backlog
 -------
+* [ ] Group by
+* [ ] Having
+* [ ] Union
+* [ ] Intersect
+* [ ] Minus/Except
+* [ ] Better test concern separation
+* [ ] Misuse reporting
+* [ ] Faster Firestore tests
 * [ ] Automatic toJson and fromJson
 * [ ] SQLite support
+* [ ] MySQL support
 * [ ] Emulate unsupported Firestore features
+* [ ] Typesafe fields (eg: `select(employee.name).from(Employee).where(employee.department).equals('Sales')`)
+* [ ] Support PostgreSQL arrays and complex types (depends on driver issue: [postgresql-dart#121](https://github.com/stablekernel/postgresql-dart/issues/121))

@@ -123,7 +123,7 @@ class PostgresBox extends Box {
   SelectStep select(List<Field> fields) => _SelectStep(this, fields);
 
   @override
-  QueryStep<T> selectFrom<T>([Type type]) => _QueryStep<T>(this, type, [], {});
+  QueryStep<T> selectFrom<T>([Type type, String alias]) => _QueryStep<T>(this, type, [], {});
 
   @override
   Future store(dynamic entity) async {
@@ -231,7 +231,7 @@ class _SelectStep implements SelectStep {
   _SelectStep(this._box, this._fields);
 
   @override
-  _QueryStep from(Type type) => _QueryStep(_box, type, _fields, {});
+  _QueryStep from(Type type, [String alias]) => _QueryStep(_box, type, _fields, {});
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
@@ -268,6 +268,12 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
 
   Map<String, dynamic> _indexIterable(String field, Iterable<dynamic> values) =>
       {for (var v in values) _index(field): v};
+
+  @override
+  JoinStep<T> innerJoin(Type type, [String alias]) {
+    // TODO: implement innerJoin
+    throw UnimplementedError();
+  }
 }
 
 class _WhereStep<T> implements WhereStep<T> {
@@ -328,7 +334,7 @@ class _WhereStep<T> implements WhereStep<T> {
   }
 
   @override
-  QueryStep<T> oneOf(List<dynamic> values) {
+  QueryStep<T> in_(Iterable<dynamic> values) {
     var indexed = query._indexIterable(field, values);
     return _queryStep('${_fieldName(field)} IN (${indexed.keys.map((f) => '@$f').join(', ')})', indexed);
   }

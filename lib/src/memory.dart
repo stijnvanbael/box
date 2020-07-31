@@ -36,7 +36,7 @@ class MemoryBox extends Box {
   SelectStep select(List<Field> fields) => _SelectStep(this, fields);
 
   @override
-  _QueryStep<T> selectFrom<T>([Type type]) {
+  _QueryStep<T> selectFrom<T>([Type type, String alias]) {
     return _QueryStep<T>(this, type);
   }
 
@@ -62,7 +62,7 @@ class _SelectStep implements SelectStep {
   _SelectStep(this._box, this._fields);
 
   @override
-  _QueryStep from(Type type) => _QueryStep(_box, type, _fields);
+  _QueryStep from(Type type, [String alias]) => _QueryStep(_box, type, _fields);
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
@@ -82,6 +82,12 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
 
   @override
   WhereStep<T> or(String field) => _OrStep(field, this);
+
+  @override
+  JoinStep<T> innerJoin(Type type, [String alias]) {
+    // TODO: implement innerJoin
+    throw UnimplementedError();
+  }
 }
 
 class _OrStep<T> extends _WhereStep<T> {
@@ -162,7 +168,7 @@ class _WhereStep<T> implements WhereStep<T> {
       _queryStep(_BetweenPredicate(field, value1, value2, query.box.registry));
 
   @override
-  QueryStep<T> oneOf(List<dynamic> values) => _queryStep(_OneOfPredicate(field, values, query.box.registry));
+  QueryStep<T> in_(Iterable<dynamic> values) => _queryStep(_InPredicate(field, values, query.box.registry));
 
   @override
   QueryStep<T> contains(dynamic value) => _queryStep(_ContainsPredicate(field, value, query.box.registry));
@@ -306,8 +312,8 @@ class _BetweenPredicate<T> extends Predicate<T> {
   bool evaluate(T object) => _lowerBound.evaluate(object) && _upperBound.evaluate(object);
 }
 
-class _OneOfPredicate<T, E> extends _ExpressionPredicate<T, List<E>> {
-  _OneOfPredicate(String field, List<E> values, Registry registry) : super(field, values, registry);
+class _InPredicate<T, E> extends _ExpressionPredicate<T, List<E>> {
+  _InPredicate(String field, List<E> values, Registry registry) : super(field, values, registry);
 
   @override
   bool evaluate(T object) {

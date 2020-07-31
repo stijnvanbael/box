@@ -21,7 +21,7 @@ abstract class Box {
 
   Future<T> find<T>(dynamic key, [Type type]);
 
-  QueryStep<T> selectFrom<T>([Type type]);
+  QueryStep<T> selectFrom<T>([Type type, String alias]);
 
   SelectStep select(List<Field> fields);
 
@@ -41,7 +41,7 @@ abstract class Box {
 }
 
 abstract class SelectStep {
-  QueryStep from(Type type);
+  QueryStep from(Type type, [String alias]);
 }
 
 abstract class QueryStep<T> extends ExpectationStep<T> {
@@ -52,6 +52,12 @@ abstract class QueryStep<T> extends ExpectationStep<T> {
   WhereStep<T> and(String field);
 
   WhereStep<T> or(String field);
+
+  JoinStep<T> innerJoin(Type type, [String alias]);
+}
+
+abstract class JoinStep<T> {
+  WhereStep<T> on(String field);
 }
 
 abstract class WhereStep<T> {
@@ -71,7 +77,7 @@ abstract class WhereStep<T> {
 
   QueryStep<T> between(dynamic value1, dynamic value2);
 
-  QueryStep<T> oneOf(List<dynamic> values);
+  QueryStep<T> in_(Iterable<dynamic> values);
 
   QueryStep<T> contains(dynamic value);
 }

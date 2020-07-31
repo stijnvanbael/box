@@ -27,7 +27,7 @@ class MongoDbBox extends Box {
   }
 
   @override
-  QueryStep<T> selectFrom<T>([Type type]) => _QueryStep<T>(this, type, null);
+  QueryStep<T> selectFrom<T>([Type type, String alias]) => _QueryStep<T>(this, type, null);
 
   @override
   Future store(dynamic entity) async {
@@ -99,7 +99,7 @@ class _SelectStep implements SelectStep {
   _SelectStep(this._box, this._fields);
 
   @override
-  _QueryStep from(Type type) => _QueryStep(_box, type, _fields);
+  _QueryStep from(Type type, [String alias]) => _QueryStep(_box, type, _fields);
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
@@ -122,6 +122,12 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
 
   @override
   WhereStep<T> or(String field) => _OrStep(field, this);
+
+  @override
+  JoinStep<T> innerJoin(Type type, [String alias]) {
+    // TODO: implement innerJoin
+    throw UnimplementedError();
+  }
 }
 
 class _OrStep<T> extends _WhereStep<T> {
@@ -240,10 +246,12 @@ class _WhereStep<T> implements WhereStep<T> {
       !field.contains('.') && registry.lookup(type).isKey(field) ? '_id' : field;
 
   @override
-  QueryStep<T> oneOf(List<dynamic> values) => _queryStep({r'$in': values});
+  QueryStep<T> in_(Iterable<dynamic> values) => _queryStep({r'$in': List.from(values)});
 
   @override
-  QueryStep<T> contains(dynamic value) => _queryStep({r'$all': [value]});
+  QueryStep<T> contains(dynamic value) => _queryStep({
+        r'$all': [value]
+      });
 }
 
 class _NotStep<T> extends _WhereStep<T> {

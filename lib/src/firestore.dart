@@ -52,7 +52,7 @@ class FirestoreBox extends Box {
   SelectStep select(List<Field> fields) => _SelectStep(this, fields);
 
   @override
-  QueryStep<T> selectFrom<T>([Type type]) {
+  QueryStep<T> selectFrom<T>([Type type, String alias]) {
     return _QueryStep(this, type ?? T, []);
   }
 
@@ -101,7 +101,7 @@ class _SelectStep implements SelectStep {
   _SelectStep(this._box, this._fields);
 
   @override
-  _QueryStep from(Type type) => _QueryStep(_box, type, _fields);
+  _QueryStep from(Type type, [String alias]) => _QueryStep(_box, type, _fields);
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
@@ -121,6 +121,12 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
 
   @override
   WhereStep<T> where(String field) => _WhereStep(field, this);
+
+  @override
+  JoinStep<T> innerJoin(Type type, [String alias]) {
+    // TODO: implement innerJoin
+    throw UnimplementedError();
+  }
 }
 
 class _WhereStep<T> implements WhereStep<T> {
@@ -157,7 +163,7 @@ class _WhereStep<T> implements WhereStep<T> {
   QueryStep<T> lte(dynamic value) => _fieldFilter('LESS_THAN_OR_EQUAL', value);
 
   @override
-  QueryStep<T> oneOf(List<dynamic> values) {
+  QueryStep<T> in_(Iterable<dynamic> values) {
     throw UnimplementedError('OneOf is not supported');
   }
 
