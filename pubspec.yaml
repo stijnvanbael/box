@@ -10,11 +10,12 @@ dependencies:
   collection: ^1.14.11
   inflection2: ^0.4.2
   recase: ^3.0.0
+  mongo_dart: ^0.4.0
+  postgres: ^2.1.1
+  http: ^0.12.1
+  googleapis_auth: ^0.2.11
+
 dev_dependencies:
   test: ^1.6.0
   build_runner: ^1.10.0
-  mongo_dart: ^0.4.0
-  googleapis_auth: ^0.2.11
-  http: ^0.12.1
-  postgres: ^2.1.1
   box_generator: ^0.2.6
