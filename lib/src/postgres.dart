@@ -54,7 +54,7 @@ class PostgresBox extends Box {
     var results =
         await connection.mappedResultsQuery('SELECT * FROM "$tableName" WHERE $conditions', substitutionValues: values);
     if (results.isNotEmpty) {
-      return _mapRow<T>(results.first[tableName], entitySupport, type, []);
+      return _mapRow<T>(results.first[tableName], entitySupport, type, [], []);
     }
     return null;
   }
@@ -67,6 +67,7 @@ class PostgresBox extends Box {
     int limit,
     int offset,
     List<Field> selectFields,
+    Map<_Table, String> joins,
   ) async* {
     var connection = await _openConnection;
     var entitySupport = registry.lookup(type ?? T);
@@ -74,13 +75,14 @@ class PostgresBox extends Box {
     var orderClause =
         order.isNotEmpty ? 'ORDER BY ${order.entries.map((e) => '${_snakeCase(e.key)} ${e.value}').join(', ')}' : '';
     var sql = 'SELECT * FROM "$tableName"'
+        '${joins.isNotEmpty ? joins.entries.map((e) => ' INNER JOIN ${e.key.name} ON ${e.value}').join(' ') : ''}'
         '${conditions.isNotEmpty ? ' WHERE $conditions ' : ' '}'
         '$orderClause '
         'LIMIT $limit OFFSET $offset';
     try {
       var results = await connection.mappedResultsQuery(sql, substitutionValues: bindings);
       for (var result in results) {
-        yield _mapRow<T>(result[tableName], entitySupport, type, selectFields);
+        yield _mapRow<T>(result[tableName], entitySupport, type, selectFields, joins.keys);
       }
     } catch (e) {
       print('Error executing SQL: $sql\n  Bindings: $bindings\n  Error message: $e');
@@ -88,17 +90,28 @@ class PostgresBox extends Box {
     }
   }
 
-  T _mapRow<T>(Map<String, dynamic> row, EntitySupport entitySupport, Type type, List<Field> selectFields) {
-    var converted = _convertResult<T>(row, type);
-    if (selectFields.isEmpty) {
-      return entitySupport.deserialize(converted);
+  T _mapRow<T>(Map<String, dynamic> row, EntitySupport entitySupport, Type type, List<Field> selectFields,
+      Iterable<_Table> joinTables) {
+    if (joinTables.isEmpty) {
+      var converted = _convertResult<T>(row, type);
+      if (selectFields.isEmpty) {
+        return entitySupport.deserialize(converted);
+      } else {
+        return _mapFields(converted, selectFields) as T;
+      }
     } else {
-      return _mapFields(converted, selectFields) as T;
+      return {
+        entitySupport.name: _mapRow(row, entitySupport, type, selectFields, []),
+        ...{
+          for (var table in joinTables)
+            registry.lookup(table.type).name: _mapRow(row, registry.lookup(table.type), table.type, selectFields, [])
+        }
+      } as T;
     }
   }
 
   Map<String, dynamic> _mapFields(Map<String, dynamic> converted, List<Field> selectFields) {
-    return { for(var field in selectFields) field.alias: field.resolve(converted) };
+    return {for (var field in selectFields) field.alias: field.resolve(converted)};
   }
 
   dynamic _convertResult<T>(dynamic value, [Type type]) {
@@ -220,7 +233,8 @@ class PostgresBox extends Box {
     return matcher<dynamic, dynamic>()
         .when(any([typeIs<String>(), typeIs<num>(), typeIs<bool>()]), (v) => v)
         .whenIs<Iterable>((iterable) => iterable.map((e) => _fromJson(e, dynamic)).toList())
-        .whenIs<Map>((map) => map.map((key, value) => MapEntry(key, _fromJson(value, dynamic)))).apply(json);
+        .whenIs<Map>((map) => map.map((key, value) => MapEntry(key, _fromJson(value, dynamic))))
+        .apply(json);
   }
 }
 
@@ -237,15 +251,18 @@ class _SelectStep implements SelectStep {
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
   final Map<String, int> _latestIndex;
 
-  _QueryStep(PostgresBox box, Type type, List<Field> fields, this._latestIndex)
-      : super(box, '', {}, {}, type ?? T, fields);
+  _QueryStep(PostgresBox box, Type type, List<Field> fields, this._latestIndex) : super(box, type ?? T, fields);
 
   _QueryStep.withCondition(_QueryStep<T> query, String condition, Map<String, dynamic> bindings, this._latestIndex)
-      : super(query.box, condition, bindings, query._order, query._type, query._selectFields);
+      : super.fromExisting(query, conditions: condition, bindings: bindings);
 
   _QueryStep.withOrder(_QueryStep<T> query, Map<String, String> order, this._latestIndex)
-      : super(query.box, query._conditions, query._bindings, query._order..addAll(order), query._type,
-            query._selectFields);
+      : super.fromExisting(query, order: {...query._order, ...order});
+
+  _QueryStep.withJoin(_QueryStep<T> query, Type type, String join, Map<String, dynamic> bindings, this._latestIndex)
+      : super.fromExisting(query,
+            bindings: bindings,
+            joins: {...query._joins, _Table(type, _snakeCase(query.box.registry.lookup(type).name)): join});
 
   @override
   OrderByStep<T> orderBy(String field) => _OrderByStep(field, this);
@@ -270,9 +287,31 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
       {for (var v in values) _index(field): v};
 
   @override
-  JoinStep<T> innerJoin(Type type, [String alias]) {
-    // TODO: implement innerJoin
-    throw UnimplementedError();
+  JoinStep<T> innerJoin(Type type, [String alias]) => _JoinStep(type, this);
+}
+
+class _JoinStep<T> implements JoinStep<T> {
+  final Type type;
+  final _QueryStep<T> query;
+
+  _JoinStep(this.type, this.query);
+
+  @override
+  WhereStep<T> on(String field) => _JoinOnStep(field, type, query);
+}
+
+class _JoinOnStep<T> extends _WhereStep<T> {
+  final Type type;
+
+  _JoinOnStep(String field, this.type, _QueryStep<T> query) : super(field, query);
+
+  @override
+  QueryStep<T> _queryStep(String condition, Map<String, dynamic> bindings) => _QueryStep<T>.withJoin(
+      query, type, combine(condition), Map.from(bindings)..addAll(query._bindings), query._latestIndex);
+
+  @override
+  QueryStep<T> equals(dynamic value) {
+    return _queryStep('${_fieldName(field, joinType: type)} = ${_fieldName(value, joinType: type)}', {});
   }
 }
 
@@ -349,21 +388,27 @@ class _WhereStep<T> implements WhereStep<T> {
     }
   }
 
-  String _fieldName(String field, {bool asJson = false}) {
+  String _fieldName(String field, {bool asJson = false, Type joinType}) {
     if (field.contains('.')) {
       var parts = field.split('.');
-      if (query.box.objectRepresentation == ObjectRepresentation.json) {
+      if (query.box.objectRepresentation == ObjectRepresentation.json && !_isTable(parts[0], joinType)) {
         var partsInBetween = parts.sublist(1, parts.length - 1);
         return '(${_snakeCase(parts.first)}'
             '${partsInBetween.isNotEmpty ? '->' + partsInBetween.map((part) => "'$part'").join('->') : ''}'
             "${asJson ? '->' : '->>'}'${parts.last}'${asJson ? ')::jsonb' : ')'}";
       } else {
-        return '${parts.map(_snakeCase).join('.')}';
+        return '"${parts.map(_snakeCase).join('"."')}"';
       }
     } else {
       return _snakeCase(field);
     }
   }
+
+  bool _isTable(String name, Type joinType) =>
+      query.box.registry.lookup(query._type).name == name ||
+      (joinType != null && query.box.registry.lookup(joinType).name == name) ||
+      query._joins.keys.any((joinTable) =>
+          joinTable.alias != null ? joinTable.alias == name : query.box.registry.lookup(joinTable.type).name == name);
 }
 
 class _AndStep<T> extends _WhereStep<T> {
@@ -395,28 +440,54 @@ class _OrderByStep<T> implements OrderByStep<T> {
   _OrderByStep(this.field, this._query);
 
   @override
-  ExpectationStep<T> ascending() => _ExpectationStep(
-      _query.box, _query._conditions, _query._bindings, {field: 'ASC'}, _query._type, _query._selectFields);
+  ExpectationStep<T> ascending() => _ExpectationStep.fromExisting(_query, order: {..._query._order, field: 'ASC'});
 
   @override
-  ExpectationStep<T> descending() => _ExpectationStep(
-      _query.box, _query._conditions, _query._bindings, {field: 'DESC'}, _query._type, _query._selectFields);
+  ExpectationStep<T> descending() => _ExpectationStep.fromExisting(_query, order: {..._query._order, field: 'DESC'});
 }
 
 class _ExpectationStep<T> extends ExpectationStep<T> {
   @override
   final PostgresBox box;
   final String _conditions;
+  final Map<_Table, String> _joins;
   final Map<String, dynamic> _bindings;
   final Map<String, String> _order;
   final Type _type;
   final List<Field> _selectFields;
 
-  _ExpectationStep(this.box, this._conditions, this._bindings, this._order, this._type, this._selectFields);
+  _ExpectationStep(this.box, this._type, this._selectFields)
+      : _conditions = '',
+        _joins = {},
+        _bindings = {},
+        _order = {};
+
+  _ExpectationStep.fromExisting(
+    _ExpectationStep step, {
+    String conditions,
+    Map<String, dynamic> bindings,
+    Map<String, String> order,
+    Map<_Table, String> joins,
+    List<Field> selectFields,
+  })  : box = step.box,
+        _conditions = conditions ?? step._conditions,
+        _joins = joins ?? step._joins,
+        _bindings = bindings ?? step._bindings,
+        _order = order ?? step._order,
+        _type = step._type,
+        _selectFields = selectFields ?? step._selectFields;
 
   @override
   Stream<T> stream({int limit = 1000000, int offset = 0}) =>
-      box._query<T>(_conditions, _bindings, _order, _type, limit, offset, _selectFields);
+      box._query<T>(_conditions, _bindings, _order, _type, limit, offset, _selectFields, _joins);
+}
+
+class _Table {
+  final Type type;
+  final String name;
+  final String alias;
+
+  _Table(this.type, this.name, [this.alias]);
 }
 
 String _snakeCase(String field) => ReCase(field).snakeCase;

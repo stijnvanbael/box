@@ -5,8 +5,6 @@ import 'package:box/postgres.dart';
 import 'package:collection/collection.dart';
 import 'package:test/test.dart';
 
-import 'joins.dart';
-
 part 'box.g.dart';
 
 var registry = initBoxRegistry();
@@ -15,7 +13,7 @@ var firestore = FirestoreBox('.secrets/firestore.json', registry);
 void main() async {
   await runTests('Memory', () => MemoryBox(registry));
   await runTests('File', () => FileBox('.box/test', registry));
-  await runTests('MongoDB', () => MongoDbBox('localhost', registry, database: 'box_test'));
+  await runTests('MongoDB', () => MongoDbBox('localhost', registry, port: 32768, database: 'box_test'));
   await runTests('PostgreSQL', () => PostgresBox('localhost', registry, database: 'box_test_json'));
   await runTests('Firestore', () => firestore);
 }
@@ -381,8 +379,6 @@ void runTests(String name, Box Function() boxBuilder) async {
           ]));
     });
   });
-
-  joinTests(name, boxBuilder);
 }
 
 @entity
