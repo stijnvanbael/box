@@ -17,11 +17,13 @@ See [box_generator](https://github.com/stijnvanbael/box_generator/blob/master/RE
 
 Example:
 
-    var registry = initBoxRegistry();
+    var registry = Registry()..register(User$BoxSupport());
     var box = new FileBox('.box/test', registry);
+    
     var users = await box.selectFrom<User>()
                                 .where('name').like('C%')
                                 .orderBy('name').ascending()
                                 .list();
+                                
     users.forEach((user) => print(user.name)));
 

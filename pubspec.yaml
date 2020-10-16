@@ -1,6 +1,6 @@
 name: box
 homepage: https://github.com/stijnvanbael/box
-version: 0.2.6
+version: 0.3.0
 description: A fluent Dart persistence API inspired by SQL
 environment:
   sdk: ">=2.2.2 <3.0.0"
@@ -18,4 +18,5 @@ dependencies:
 dev_dependencies:
   test: ^1.6.0
   build_runner: ^1.10.0
-  box_generator: ^0.2.6
+  box_generator: #0.3.0
+    path: ../box_generator

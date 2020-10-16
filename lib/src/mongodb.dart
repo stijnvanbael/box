@@ -6,7 +6,8 @@ import 'package:meta/meta.dart';
 import 'package:mongo_dart/mongo_dart.dart' show Db, where, DbCollection, State, ObjectId;
 
 class MongoDbBox extends Box {
-  final Db _db;
+  final String _connectionString;
+  Db _db;
 
   @override
   bool get persistent => true;
@@ -16,7 +17,7 @@ class MongoDbBox extends Box {
     Registry registry, {
     int port = 27017,
     @required String database,
-  })  : _db = Db('mongodb://$hostname:$port/$database'),
+  })  : _connectionString = 'mongodb://$hostname:$port/$database',
         super(registry);
 
   @override
@@ -31,14 +32,21 @@ class MongoDbBox extends Box {
 
   @override
   Future store(dynamic entity) async {
-    var document = _wrapKey(entity.toJson(), registry.lookup(entity.runtimeType).keyFields);
+    var entitySupport = registry.lookup(entity.runtimeType);
+    var document = _wrapKey(entitySupport.serialize(entity), entitySupport.keyFields);
     var collection = await _collectionFor(entity.runtimeType);
     await collection.save(document);
   }
 
   Future<DbCollection> _collectionFor<T>(Type type) async {
-    if (_db.state == State.INIT) {
-      await _db.open();
+    if (_db == null || _db.state != State.OPEN || !_db.isConnected) {
+      try {
+        _db = Db(_connectionString);
+        await _db.open();
+      } catch (e) {
+        _db = null;
+        rethrow;
+      }
     }
     return _db.collection(_collectionNameFor(T == dynamic ? type : T));
   }

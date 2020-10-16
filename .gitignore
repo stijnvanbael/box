@@ -7,3 +7,4 @@ pubspec.lock
 .idea
 .secrets
 packages
+.dart_tool/

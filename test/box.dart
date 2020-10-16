@@ -7,7 +7,11 @@ import 'package:test/test.dart';
 
 part 'box.g.dart';
 
-var registry = initBoxRegistry();
+var registry = Registry()
+  ..register(User$BoxSupport())
+  ..register(Post$BoxSupport())
+  ..register(LastWords$BoxSupport());
+
 var firestore = FirestoreBox('.secrets/firestore.json', registry);
 
 void main() async {
@@ -388,8 +392,6 @@ class LastWords {
 
   LastWords({this.name, this.words});
 
-  LastWords.fromJson(Map map) : this(name: map['name'], words: map['words']);
-
   @override
   String toString() => '$name: $words';
 
@@ -400,8 +402,6 @@ class LastWords {
 
   @override
   int get hashCode => name.hashCode ^ words.hashCode;
-
-  Map<String, dynamic> toJson() => {'name': name, 'words': words};
 }
 
 @entity
@@ -413,14 +413,6 @@ class User {
   List<Post> posts;
 
   User({this.id, this.name, this.lastPost, this.posts});
-
-  User.fromJson(Map map)
-      : this(
-          id: map['id'],
-          name: map['name'],
-          lastPost: map['lastPost'] != null ? Post.fromJson(map['lastPost']) : null,
-          posts: map['posts'] != null ? map['posts'].map((postMap) => Post.fromJson(postMap)) : null,
-        );
 
   @override
   String toString() => '@$id ($name)';
@@ -434,13 +426,6 @@ class User {
     User user = other;
     return (user.id == id && user.name == name);
   }
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'lastPost': lastPost?.toJson(),
-        'posts': posts?.map((post) => post.toJson()),
-      };
 }
 
 @entity
@@ -454,16 +439,6 @@ class Post {
 
   Post({this.userId, this.timestamp, this.text, this.keywords});
 
-  Post.fromJson(Map map)
-      : this(
-          userId: map['userId'],
-          timestamp: map['timestamp'] != null
-              ? (map['timestamp'] is DateTime ? map['timestamp'] : DateTime.parse(map['timestamp']))
-              : null,
-          text: map['text'],
-          keywords: map['keywords'] != null ? List<String>.from(map['keywords']) : null,
-        );
-
   @override
   int get hashCode => userId.hashCode ^ timestamp.hashCode ^ text.hashCode ^ keywords.hashCode;
 
@@ -476,13 +451,6 @@ class Post {
         post.text == text &&
         ListEquality().equals(post.keywords, keywords));
   }
-
-  Map<String, dynamic> toJson() => {
-        'userId': userId,
-        'timestamp': timestamp?.toIso8601String(),
-        'text': text,
-        'keywords': keywords,
-      };
 
   @override
   String toString() {

@@ -225,8 +225,10 @@ class PostgresBox extends Box {
         .whenIs<Iterable>((o) => o.map((value) => _toJson(value)).toList())
         .whenIs<DateTime>((o) => o.toIso8601String())
         .when(any([typeIs<String>(), typeIs<num>(), typeIs<bool>()]), (v) => v)
-        .otherwise((input) => input.toJson())
-        .apply(object);
+        .otherwise((input) {
+      var entitySupport = registry.lookup(object.runtimeType);
+      return entitySupport != null ? entitySupport.serialize(input) : input.toJson();
+    }).apply(object);
   }
 
   dynamic _fromJson(dynamic json, Type type) {

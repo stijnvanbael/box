@@ -1,5 +1,10 @@
+0.3.0 Easier mapping
+--------------------
+* [x] Automatic toJson and fromJson
+
+
 0.2.6 PostgreSQL
------------------------
+----------------
 * [x] PostgreSQL support
 
 0.2.5 ONE OF & CONTAINS
@@ -37,7 +42,6 @@ Backlog
 * [ ] Better test concern separation
 * [ ] Misuse reporting
 * [ ] Faster Firestore tests
-* [ ] Automatic toJson and fromJson
 * [ ] SQLite support
 * [ ] MySQL support
 * [ ] Emulate unsupported Firestore features

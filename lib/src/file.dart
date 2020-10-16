@@ -28,12 +28,16 @@ class FileBox extends MemoryBox {
     }
     _persisting = true;
     var entities = await entitiesFor(type);
-    var file = _fileOf(registry.lookup(type).name);
+    var entitySupport = registry.lookup(type);
+    var file = _fileOf(entitySupport.name);
     if (file.existsSync()) {
       await file.delete();
     }
     await file.create(recursive: true);
-    var json = await Stream.fromIterable(entities.values).map((value) => jsonEncode(value)).join('\n');
+    var json = await Stream.fromIterable(entities.values)
+    .map((entity) => entitySupport.serialize(entity))
+        .map((value) => jsonEncode(value))
+        .join('\n');
     await file.writeAsString(json.toString(), mode: FileMode.append);
     _persisting = false;
   }
@@ -66,7 +70,7 @@ class FileBox extends MemoryBox {
             .transform(utf8.decoder)
             .transform(const LineSplitter())
             .map((line) {
-          if (line.startsWith("{")) {
+          if (line.startsWith('{')) {
             return entitySupport.deserialize(jsonDecode(line));
           }
           return null;

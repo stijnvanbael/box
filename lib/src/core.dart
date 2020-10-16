@@ -209,27 +209,28 @@ class Field {
 
 Field $(String name, {String alias}) => Field(name, alias ?? name);
 
-typedef Deserializer<T> = T Function(Map map);
-
 typedef FieldAccessor<T> = dynamic Function(T entity);
 
 abstract class EntitySupport<T> {
-  final FieldAccessor<T> _keyAccessor;
-  final Deserializer<T> _deserializer;
-  final Map<String, FieldAccessor<T>> _fieldAccessors;
+  final FieldAccessor<T> keyAccessor;
+  final Map<String, FieldAccessor<T>> fieldAccessors;
   final Map<String, Type> fieldTypes;
   final List<String> keyFields;
   final String name;
+  Registry registry;
 
-  EntitySupport(
-      this.name, this._keyAccessor, this._deserializer, this._fieldAccessors, this.keyFields, this.fieldTypes);
+  EntitySupport({
+    this.name,
+    this.keyAccessor,
+    this.fieldAccessors,
+    this.keyFields,
+    this.fieldTypes,
+  });
 
-  dynamic getKey(T entity) => _keyAccessor(entity);
-
-  T deserialize(Map map) => map != null ? _deserializer(map) : null;
+  dynamic getKey(T entity) => keyAccessor(entity);
 
   dynamic getFieldValue(String fieldName, T entity) {
-    var fieldAccessor = _fieldAccessors[fieldName];
+    var fieldAccessor = fieldAccessors[fieldName];
     if (fieldAccessor == null) {
       throw 'No such field "$fieldName" on entity $name';
     }
@@ -238,7 +239,19 @@ abstract class EntitySupport<T> {
 
   bool isKey(String field) => keyFields.contains(field);
 
-  List<String> get fields => _fieldAccessors.keys.toList();
+  List<String> get fields => fieldAccessors.keys.toList();
+
+  T deserialize(Map<String, dynamic> map);
+
+  Map<String, dynamic> serialize(T entity);
+
+  DateTime deserializeDateTime(String input) => input != null ? DateTime.parse(input) : null;
+
+  E deserializeEntity<E>(Map<String, dynamic> map) =>
+      map != null ? registry.lookup<E>().deserialize(map) : null;
+
+  Map<String, dynamic> serializeEntity<E>(E entity) =>
+      entity != null ? registry.lookup<E>().serialize(entity) : null;
 }
 
 class Registry {
@@ -246,6 +259,7 @@ class Registry {
 
   EntitySupport<T> register<T>(EntitySupport<T> support) {
     _entries[T] = support;
+    support.registry = this;
     return support;
   }
 

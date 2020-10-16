@@ -63,7 +63,7 @@ class FirestoreBox extends Box {
     var documentType = entitySupport.name;
     var key = entitySupport.getKey(entity);
     _verifyNoCompositeKey(key);
-    var document = entity.toJson();
+    var document = entitySupport.serialize(entity);
     return connection.patch(documentType, key, document);
   }
 
