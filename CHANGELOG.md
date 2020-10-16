@@ -2,7 +2,6 @@
 --------------------
 * [x] Automatic toJson and fromJson
 
-
 0.2.6 PostgreSQL
 ----------------
 * [x] PostgreSQL support
@@ -46,4 +45,5 @@ Backlog
 * [ ] MySQL support
 * [ ] Emulate unsupported Firestore features
 * [ ] Typesafe fields (eg: `select(employee.name).from(Employee).where(employee.department).equals('Sales')`)
+* [ ] Joins
 * [ ] Support PostgreSQL arrays and complex types (depends on driver issue: [postgresql-dart#121](https://github.com/stablekernel/postgresql-dart/issues/121))
