@@ -1,7 +1,7 @@
 name: box
 homepage: https://github.com/stijnvanbael/box
 version: 0.3.0
-description: A fluent Dart persistence API inspired by SQL
+description: A fluent Dart persistence API inspired by SQL that supports PostgreSQL, MongoDB, simple file and in-memory storage.
 environment:
   sdk: ">=2.2.2 <3.0.0"
 dependencies:
@@ -10,7 +10,7 @@ dependencies:
   collection: ^1.14.11
   inflection2: ^0.4.2
   recase: ^3.0.0
-  mongo_dart: ^0.4.0
+  mongo_dart: ^0.4.3
   postgres: ^2.1.1
   http: ^0.12.1
   googleapis_auth: ^0.2.11

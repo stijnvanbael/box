@@ -116,9 +116,6 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
   _QueryStep.withSelector(_QueryStep<T> query, Map<String, dynamic> selector)
       : super(query.box, selector, query._order, query._type, query._selectFields);
 
-  _QueryStep.withOrder(_QueryStep<T> query, Map<String, int> order)
-      : super(query.box, query._selector, query._order..addAll(order), query._type, query._selectFields);
-
   @override
   OrderByStep<T> orderBy(String field) => _OrderByStep(field, this);
 
