@@ -258,9 +258,6 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
   _QueryStep.withCondition(_QueryStep<T> query, String condition, Map<String, dynamic> bindings, this._latestIndex)
       : super.fromExisting(query, conditions: condition, bindings: bindings);
 
-  _QueryStep.withOrder(_QueryStep<T> query, Map<String, String> order, this._latestIndex)
-      : super.fromExisting(query, order: {...query._order, ...order});
-
   _QueryStep.withJoin(_QueryStep<T> query, Type type, String join, Map<String, dynamic> bindings, this._latestIndex)
       : super.fromExisting(query,
             bindings: bindings,

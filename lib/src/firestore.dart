@@ -79,19 +79,19 @@ class FirestoreBox extends Box {
   }
 
   @override
-  bool get compositeKeySupported => false;
+  bool get supportsCompositeKey => false;
 
   @override
-  bool get likeSupported => false;
+  bool get supportsLike => false;
 
   @override
-  bool get notSupported => false;
+  bool get supportsNot => false;
 
   @override
-  bool get orSupported => false;
+  bool get supportsOr => false;
 
   @override
-  bool get oneOfSupported => false;
+  bool get supportsIn => false;
 }
 
 class _SelectStep implements SelectStep {

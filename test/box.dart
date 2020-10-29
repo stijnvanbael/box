@@ -69,7 +69,7 @@ void runTests(String name, Box Function() boxBuilder) async {
       box = await reconnectIfPersistent(box);
       var found = await box.find<Post>({'userId': user.id, 'timestamp': timestamp});
       expect(found, equals(post));
-    }, skip: !boxBuilder().compositeKeySupported);
+    }, skip: !boxBuilder().supportsCompositeKey);
   });
 
   group('$name - Predicates', () {
@@ -98,7 +98,7 @@ void runTests(String name, Box Function() boxBuilder) async {
       box = await reconnectIfPersistent(box);
       expect(await box.selectFrom<User>().where('name').like('C%').orderBy('name').ascending().list(),
           equals([crollis, cstone]));
-    }, skip: !boxBuilder().likeSupported);
+    }, skip: !boxBuilder().supportsLike);
 
     test('> predicate', () async {
       var jdoe = john;
@@ -182,7 +182,7 @@ void runTests(String name, Box Function() boxBuilder) async {
       box = await reconnectIfPersistent(box);
       expect((await box.selectFrom<User>().where('id').in_(['crollis', 'koneil']).orderBy('name').ascending().list()),
           equals([crollis, koneil]));
-    }, skip: !boxBuilder().oneOfSupported);
+    }, skip: !boxBuilder().supportsIn);
 
     test('CONTAINS predicate', () async {
       var crollis =
@@ -245,7 +245,7 @@ void runTests(String name, Box Function() boxBuilder) async {
               .ascending()
               .list(),
           equals([cstone, dsnow]));
-    }, skip: !boxBuilder().orSupported);
+    }, skip: !boxBuilder().supportsOr);
 
     test('NOT, descending', () async {
       var jdoe = john;
@@ -260,7 +260,7 @@ void runTests(String name, Box Function() boxBuilder) async {
       expect(
           await box.selectFrom<User>().where('name').not().equals('Donovan Snow').orderBy('name').descending().list(),
           equals([koneil, jdoe, cstone, crollis]));
-    }, skip: !boxBuilder().notSupported);
+    }, skip: !boxBuilder().supportsNot);
   });
 
   group('$name - Deep queries', () {
