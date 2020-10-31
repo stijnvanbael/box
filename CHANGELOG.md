@@ -1,3 +1,7 @@
+0.3.0+1 Latest versions
+-----------------------
+* [x] Bumped versions of dependencies
+
 0.3.0 Easier mapping
 --------------------
 * [x] Automatic toJson and fromJson
