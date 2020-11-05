@@ -17,7 +17,7 @@ var firestore = FirestoreBox('.secrets/firestore.json', registry);
 void main() async {
   await runTests('Memory', () => MemoryBox(registry));
   await runTests('File', () => FileBox('.box/test', registry));
-  await runTests('MongoDB', () => MongoDbBox('localhost', registry, port: 32768, database: 'box_test'));
+  await runTests('MongoDB', () => MongoDbBox('mongodb://localhost:27017/box_test', registry));
   await runTests('PostgreSQL', () => PostgresBox('localhost', registry, database: 'box_test_json'));
   await runTests('Firestore', () => firestore);
 }

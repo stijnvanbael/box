@@ -2,23 +2,16 @@ library box.mongodb;
 
 import 'package:box/core.dart';
 import 'package:inflection2/inflection2.dart';
-import 'package:meta/meta.dart';
 import 'package:mongo_dart/mongo_dart.dart' show Db, where, DbCollection, State, ObjectId;
 
 class MongoDbBox extends Box {
-  final String _connectionString;
+  final String connectionString;
   Db _db;
 
   @override
   bool get persistent => true;
 
-  MongoDbBox(
-    String hostname,
-    Registry registry, {
-    int port = 27017,
-    @required String database,
-  })  : _connectionString = 'mongodb://$hostname:$port/$database',
-        super(registry);
+  MongoDbBox(this.connectionString, Registry registry) : super(registry);
 
   @override
   Future<T> find<T>(key, [Type type]) async {
@@ -41,7 +34,7 @@ class MongoDbBox extends Box {
   Future<DbCollection> _collectionFor<T>(Type type) async {
     if (_db == null || _db.state != State.OPEN || !_db.isConnected) {
       try {
-        _db = Db(_connectionString);
+        _db = Db(connectionString);
         await _db.open();
       } catch (e) {
         _db = null;
