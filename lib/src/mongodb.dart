@@ -34,8 +34,8 @@ class MongoDbBox extends Box {
   Future<DbCollection> _collectionFor<T>(Type type) async {
     if (_db == null || _db.state != State.OPEN || !_db.isConnected) {
       try {
-        _db = Db(connectionString);
-        await _db.open();
+        _db = await Db.create(connectionString);
+        await _db.open(secure: connectionString.startsWith('mongodb+srv:'));
       } catch (e) {
         _db = null;
         rethrow;
