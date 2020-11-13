@@ -22,7 +22,8 @@ abstract class Box {
   }
 
   /// Returns the key of the specified entity.
-  dynamic keyOf(dynamic entity) => registry.lookup(entity.runtimeType).getKey(entity);
+  dynamic keyOf(dynamic entity) =>
+      registry.lookup(entity.runtimeType).getKey(entity);
 
   /// Finds an entity of the specified type by primary key.
   Future<T> find<T>(dynamic key, [Type type]);
@@ -36,7 +37,7 @@ abstract class Box {
   /// Deletes all entities of the specified type from this Box.
   Future deleteAll<T>([Type type]);
 
-  /// Closes the underlying connection of this Box. After closing, a Box can no longer be used. 
+  /// Closes the underlying connection of this Box. After closing, a Box can no longer be used.
   Future close();
 
   /// Returns true if this Box implementation supports composite primary keys.
@@ -44,7 +45,7 @@ abstract class Box {
 
   /// Returns true if this Box implementation supports like conditions.
   bool get supportsLike => true;
-  
+
   /// Returns true if this Box implementation supports the NOT operator.
   bool get supportsNot => true;
 
@@ -104,7 +105,7 @@ abstract class WhereStep<T> {
   /// Query condition that matches all values less than or equal to the specified value. SQL: <=
   QueryStep<T> lte(dynamic value);
 
-  /// Query condition that matches all values greater than the first value and less than the second value. 
+  /// Query condition that matches all values greater than the first value and less than the second value.
   /// SQL: BETWEEN <value1> AND <value2>
   QueryStep<T> between(dynamic value1, dynamic value2);
 
@@ -128,7 +129,8 @@ typedef Mapper<T> = T Function(dynamic input);
 
 abstract class ExpectationStep<T> {
   /// Maps resulting records using the specified mapping function.
-  ExpectationStep<M> mapTo<M>([Mapper<M> mapper]) => _MappingStep(this, mapper ?? _typeMapper<M>());
+  ExpectationStep<M> mapTo<M>([Mapper<M> mapper]) =>
+      _MappingStep(this, mapper ?? _typeMapper<M>());
 
   /// Returns a stream of results, optionally limited by:
   ///   offset: starts returning results from the specified offset and skips all records before. SQL: OFFSET <number>
@@ -138,12 +140,14 @@ abstract class ExpectationStep<T> {
   /// Returns a list of results, optionally limited by:
   ///   offset: starts returning results from the specified offset and skips all records before. SQL: OFFSET <number>
   ///   limit: limits the number of results returned. SQL: LIMIT <number>
-  Future<List<T>> list({int limit = 1000000, int offset = 0}) async => stream(limit: limit, offset: offset).toList();
+  Future<List<T>> list({int limit = 1000000, int offset = 0}) async =>
+      stream(limit: limit, offset: offset).toList();
 
   /// Returns a single result.
   Future<T> unique() => stream(limit: 1, offset: 0).first;
 
-  Mapper<M> _typeMapper<M>() => (map) => box.registry.lookup<M>().deserialize(map);
+  Mapper<M> _typeMapper<M>() =>
+      (map) => box.registry.lookup<M>().deserialize(map);
 
   Box get box;
 }
@@ -155,10 +159,12 @@ class _MappingStep<T> extends ExpectationStep<T> {
   _MappingStep(this._wrapped, this._mapper);
 
   @override
-  ExpectationStep<M> mapTo<M>([M Function(T p1) mapper]) => _MappingStep(this, mapper);
+  ExpectationStep<M> mapTo<M>([M Function(T p1) mapper]) =>
+      _MappingStep(this, mapper);
 
   @override
-  Stream<T> stream({int limit, int offset}) => _wrapped.stream(limit: limit, offset: offset).map(_mapper);
+  Stream<T> stream({int limit, int offset}) =>
+      _wrapped.stream(limit: limit, offset: offset).map(_mapper);
 
   @override
   Future<T> unique() => stream().first;
@@ -183,7 +189,8 @@ class AndPredicate<T> extends Predicate<T> {
   AndPredicate(this._predicates);
 
   @override
-  bool evaluate(T object) => _predicates.every((predicate) => predicate.evaluate(object));
+  bool evaluate(T object) =>
+      _predicates.every((predicate) => predicate.evaluate(object));
 }
 
 class OrPredicate<T> extends Predicate<T> {
@@ -192,7 +199,8 @@ class OrPredicate<T> extends Predicate<T> {
   OrPredicate(this._predicates);
 
   @override
-  bool evaluate(T object) => _predicates.any((predicate) => predicate.evaluate(object));
+  bool evaluate(T object) =>
+      _predicates.any((predicate) => predicate.evaluate(object));
 }
 
 class NotPredicate<T> extends Predicate<T> {
@@ -292,20 +300,29 @@ abstract class EntitySupport<T> {
 
   Map<String, dynamic> serialize(T entity);
 
-  DateTime deserializeDateTime(String input) => input != null ? DateTime.parse(input) : null;
+  DateTime deserializeDateTime(String input) =>
+      input != null ? DateTime.parse(input) : null;
 
   E deserializeEntity<E>(Map<String, dynamic> map) =>
       map != null ? registry.lookup<E>().deserialize(map) : null;
 
   Map<String, dynamic> serializeEntity<E>(E entity) =>
       entity != null ? registry.lookup<E>().serialize(entity) : null;
+
+  String serializeEnum(dynamic value) =>
+      value?.toString()?.substring(toString().indexOf('.') + 1);
+
+  E deserializeEnum<E>(String value, List<E> values) => value != null
+      ? values.where((element) => serializeEnum(element) == value).first
+      : null;
 }
 
-/// Holds entity information fox Box implementations. Every Box implementation requires a registry.
+/// Holds entity information fox Box implementations.
+/// Every Box implementation requires a registry.
 class Registry {
   final Map<Type, EntitySupport> _entries = {};
 
-  /// Register the generated EntitySupport for entity to use with Box. 
+  /// Register the generated EntitySupport for entity to use with Box.
   EntitySupport<T> register<T>(EntitySupport<T> support) {
     _entries[T] = support;
     support.registry = this;
@@ -328,7 +345,8 @@ class Registry {
   dynamic getFieldValue(String fieldName, dynamic entity) {
     dynamic currentValue = entity;
     for (var subField in fieldName.split('.')) {
-      currentValue = lookup(currentValue.runtimeType).getFieldValue(subField, currentValue);
+      currentValue = lookup(currentValue.runtimeType)
+          .getFieldValue(subField, currentValue);
       if (currentValue == null) {
         return null;
       }
