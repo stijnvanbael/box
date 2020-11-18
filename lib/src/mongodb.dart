@@ -28,13 +28,13 @@ class MongoDbBox extends Box {
       _QueryStep<T>(this, type, null);
 
   @override
-  Future store(dynamic entity) => _autoRecover(() async {
-        var entitySupport = registry.lookup(entity.runtimeType);
-        var document =
-            _wrapKey(entitySupport.serialize(entity), entitySupport.keyFields);
-        var collection = await _collectionFor(entity.runtimeType);
-        await collection.save(document);
-      });
+  Future store(dynamic entity) => _autoRecover(()async {
+    var entitySupport = registry.lookup(entity.runtimeType);
+    var document =
+        _wrapKey(entitySupport.serialize(entity), entitySupport.keyFields);
+    var collection = await _collectionFor(entity.runtimeType);
+    await collection.save(document);
+  });
 
   Future<DbCollection> _collectionFor<T>(Type type) async {
     if (_db == null || _db.state != State.OPEN || !_db.isConnected) {
@@ -77,7 +77,7 @@ class MongoDbBox extends Box {
     var unwrapped = Map<String, dynamic>.from(document);
     var key = document['_id'];
     if (keyFields.length == 1) {
-      unwrapped[keyFields.first] = key;
+      unwrapped[keyFields.first] = key is ObjectId ? key.toHexString() : key;
     } else {
       unwrapped.addAll(key);
     }
