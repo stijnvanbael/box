@@ -310,11 +310,19 @@ abstract class EntitySupport<T> {
       entity != null ? registry.lookup<E>().serialize(entity) : null;
 
   String serializeEnum(dynamic value) =>
-      value?.toString()?.substring(toString().indexOf('.') + 1);
+      value?.toString()?.substring(value.toString().indexOf('.') + 1);
 
-  E deserializeEnum<E>(String value, List<E> values) => value != null
-      ? values.where((element) => serializeEnum(element) == value).first
-      : null;
+  E deserializeEnum<E>(String value, List<E> values) {
+    if (value == null) {
+      return null;
+    }
+    var filtered = values.where((element) => serializeEnum(element) == value);
+    if (filtered.isEmpty) {
+      throw ArgumentError(
+          'Could not deserialize "$value" as $E, no matching value found');
+    }
+    return filtered.first;
+  }
 }
 
 /// Holds entity information fox Box implementations.
@@ -333,10 +341,11 @@ class Registry {
   EntitySupport<T> lookup<T>([Type type]) {
     var support = _entries[type ?? T];
     if (support == null) {
-      throw 'No entry found for ${type ?? T}. To fix this:\n'
+      throw 'No registry entry found for ${type ?? T}. To fix this:\n'
           ' 1. Make sure the class is annotated with @entity\n'
           ' 2. Make sure box_generator is added to dev_dependencies in pubspec.yaml\n'
-          ' 3. Run "pub run build_runner build" again';
+          ' 3. Run "pub run build_runner build" again'
+          ' 4. Add the generated Box support to the registry: Registry()..register(${type ?? T}\$BoxSupport())';
     }
     return support;
   }

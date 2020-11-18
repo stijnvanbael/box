@@ -37,6 +37,7 @@
 
 Backlog
 -------
+* [ ] Create indexes for memory, file, MongoDB and Firestore
 * [ ] Group by
 * [ ] Having
 * [ ] Union
