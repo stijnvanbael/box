@@ -5,7 +5,14 @@ import 'dart:io';
 import 'package:box/core.dart';
 import 'package:inflection2/inflection2.dart';
 import 'package:mongo_dart/mongo_dart.dart'
-    show ConnectionException, Db, DbCollection, ObjectId, State, where;
+    show
+        ConnectionException,
+        Db,
+        DbCollection,
+        ObjectId,
+        State,
+        WriteConcern,
+        where;
 
 class MongoDbBox extends Box {
   final String connectionString;
@@ -35,6 +42,18 @@ class MongoDbBox extends Box {
     var collection = await _collectionFor(entity.runtimeType);
     await collection.save(document);
   });
+
+  @override
+  Future insertAll<T>(Iterable<T> entities) => _autoRecover(() async {
+        var entitySupport = registry.lookup<T>();
+        var collection = await _collectionFor(T);
+        var documents = entities
+            .map((entity) => _wrapKey(
+                entitySupport.serialize(entity), entitySupport.keyFields))
+            .toList();
+        await collection.insertAll(documents,
+            writeConcern: WriteConcern.ACKNOWLEDGED);
+      });
 
   Future<DbCollection> _collectionFor<T>(Type type) async {
     if (_db == null || _db.state != State.OPEN || !_db.isConnected) {
@@ -70,7 +89,8 @@ class MongoDbBox extends Box {
   @override
   SelectStep select(List<Field> fields) => _SelectStep(this, fields);
 
-  Map _unwrapKey(Map<String, dynamic> document, List<String> keyFields) {
+  Map<String, dynamic> _unwrapKey(
+      Map<String, dynamic> document, List<String> keyFields) {
     if (document == null) {
       return null;
     }
@@ -85,7 +105,8 @@ class MongoDbBox extends Box {
     return unwrapped;
   }
 
-  Map _wrapKey(Map<String, dynamic> document, List<String> keyFields) {
+  Map<String, dynamic> _wrapKey(
+      Map<String, dynamic> document, List<String> keyFields) {
     if (document == null) {
       return null;
     }
@@ -98,6 +119,41 @@ class MongoDbBox extends Box {
     wrapped.removeWhere((key, value) => keyFields.contains(key));
     return wrapped;
   }
+
+  @override
+  DeleteStep<T> deleteFrom<T>([Type type]) => _DeleteStep<T>(this, type ?? T);
+}
+
+class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
+    implements DeleteStep<T> {
+  @override
+  final MongoDbBox box;
+  @override
+  final Type type;
+  @override
+  final Map<String, dynamic> selector;
+
+  _DeleteStep(this.box, this.type) : selector = {};
+
+  @override
+  _DeleteStep<T> addSelector(Map<String, dynamic> selector) =>
+      _DeleteStep.withSelector(this, selector);
+
+  _DeleteStep.withSelector(_DeleteStep<T> step, Map<String, dynamic> selector)
+      : box = step.box,
+        type = step.type,
+        selector = selector;
+
+  @override
+  Future execute() => _autoRecover(() async {
+        var collection = await box._collectionFor(type);
+        await collection.remove(selector,
+            writeConcern: WriteConcern.ACKNOWLEDGED);
+      });
+
+  @override
+  WhereStep<T, DeleteStep<T>> where(String field) =>
+      _DeleteWhereStep(field, this);
 }
 
 class _SelectStep implements SelectStep {
@@ -110,53 +166,54 @@ class _SelectStep implements SelectStep {
   _QueryStep from(Type type, [String alias]) => _QueryStep(_box, type, _fields);
 }
 
-class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
+class _QueryStep<T> extends _ExpectationStep<T>
+    with _TypedStep<T, _QueryStep<T>>
+    implements QueryStep<T> {
   _QueryStep(MongoDbBox box, Type type, List<Field> fields)
       : super(box, {}, {}, type ?? T, fields);
 
   _QueryStep.withSelector(_QueryStep<T> query, Map<String, dynamic> selector)
-      : super(query.box, selector, query._order, query._type,
-            query._selectFields);
+      : super(
+            query.box, selector, query._order, query.type, query._selectFields);
 
   @override
   OrderByStep<T> orderBy(String field) => _OrderByStep(field, this);
 
   @override
-  WhereStep<T> where(String field) => _WhereStep(field, this);
-
-  @override
-  WhereStep<T> and(String field) => _AndStep(field, this);
-
-  @override
-  WhereStep<T> or(String field) => _OrStep(field, this);
+  WhereStep<T, QueryStep<T>> where(String field) =>
+      _QueryWhereStep(field, this);
 
   @override
   JoinStep<T> innerJoin(Type type, [String alias]) {
     // TODO: implement innerJoin
     throw UnimplementedError();
   }
+
+  @override
+  _QueryStep<T> addSelector(Map<String, dynamic> selector) =>
+      _QueryStep.withSelector(this, selector);
 }
 
-class _OrStep<T> extends _WhereStep<T> {
-  _OrStep(String field, _QueryStep<T> query) : super(field, query);
+class _OrStep<T, S extends _TypedStep<T, S>> extends _WhereStep<T, S> {
+  _OrStep(String field, S step) : super(field, step);
 
   @override
   Map<String, dynamic> combine(Map<String, dynamic> selector) =>
-      query._selector != null
+      step.selector != null
           ? {
-              r'$or': [query._selector, selector]
+              r'$or': [step.selector, selector]
             }
           : selector;
 }
 
-class _AndStep<T> extends _WhereStep<T> {
-  _AndStep(String field, _QueryStep<T> query) : super(field, query);
+class _AndStep<T, S extends _TypedStep<T, S>> extends _WhereStep<T, S> {
+  _AndStep(String field, S step) : super(field, step);
 
   @override
   Map<String, dynamic> combine(Map<String, dynamic> selector) =>
-      query._selector != null
+      step.selector != null
           ? {
-              r'$and': [query._selector, selector]
+              r'$and': [step.selector, selector]
             }
           : selector;
 }
@@ -168,31 +225,31 @@ class _OrderByStep<T> implements OrderByStep<T> {
   _OrderByStep(this.field, this._query);
 
   @override
-  ExpectationStep<T> ascending() => _ExpectationStep(_query.box,
-      _query._selector, {field: 1}, _query._type, _query._selectFields);
+  ExpectationStep<T> ascending() => _ExpectationStep<T>(_query.box,
+      _query.selector, {field: 1}, _query.type, _query._selectFields);
 
   @override
-  ExpectationStep<T> descending() => _ExpectationStep(_query.box,
-      _query._selector, {field: -1}, _query._type, _query._selectFields);
+  ExpectationStep<T> descending() => _ExpectationStep<T>(_query.box,
+      _query.selector, {field: -1}, _query.type, _query._selectFields);
 }
 
 class _ExpectationStep<T> extends ExpectationStep<T> {
   @override
   final MongoDbBox box;
-  final Map<String, dynamic> _selector;
+  final Map<String, dynamic> selector;
   final Map<String, int> _order;
-  final Type _type;
+  final Type type;
   final List<Field> _selectFields;
 
   _ExpectationStep(
-      this.box, this._selector, this._order, this._type, this._selectFields);
+      this.box, this.selector, this._order, this.type, this._selectFields);
 
   @override
   Stream<T> stream({int limit = 1000000, int offset = 0}) =>
       _autoRecoverStream(() async* {
-        var collection = await box._collectionFor<T>(_type);
+        var collection = await box._collectionFor<T>(type);
         yield* collection
-            .find({r'$query': _selector, r'$orderby': _order})
+            .find({r'$query': selector, r'$orderby': _order})
             .skip(offset) // TODO: find a more efficient way to do this
             .take(limit)
             .map(_applySelectFields);
@@ -200,7 +257,7 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
 
   T _applySelectFields(Map<String, dynamic> record) {
     if (_selectFields == null) {
-      return box._toEntity<T>(record, _type);
+      return box._toEntity<T>(record, type);
     }
     var map = {
       for (var field in _selectFields)
@@ -217,49 +274,64 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
 
   @override
   Future<T> unique() => _autoRecover(() async {
-        var collection = await box._collectionFor<T>(_type);
-        var document = await collection.findOne(_selector);
-        return box._toEntity<T>(document, _type);
+        var collection = await box._collectionFor<T>(type);
+        var document = await collection.findOne(selector);
+        return box._toEntity<T>(document, type);
       });
 }
 
-class _WhereStep<T> implements WhereStep<T> {
-  final String field;
-  final _QueryStep<T> query;
+abstract class _TypedStep<T, S extends _TypedStep<T, S>> {
+  Type get type;
 
-  _WhereStep(String field, this.query)
-      : field = _translate(field, query._type, query.box.registry);
+  MongoDbBox get box;
+
+  Map<String, dynamic> get selector;
+
+  WhereStep<T, S> and(String field) => _AndStep(field, this);
+
+  WhereStep<T, S> or(String field) => _OrStep(field, this);
+
+  S addSelector(Map<String, dynamic> selector);
+}
+
+abstract class _WhereStep<T, S extends _TypedStep<T, S>>
+    implements WhereStep<T, S> {
+  final String field;
+  final S step;
+
+  _WhereStep(String field, this.step)
+      : field = _translate(field, step.type, step.box.registry);
 
   Map<String, dynamic> combine(Map<String, dynamic> selector) => selector;
 
-  QueryStep<T> _queryStep(Map<String, dynamic> selector) =>
-      _QueryStep<T>.withSelector(query, combine({field: selector}));
+  S createNextStep(Map<String, dynamic> selector) =>
+      step.addSelector(combine({field: selector}));
 
   @override
-  WhereStep<T> not() => _NotStep<T>(this);
+  WhereStep<T, S> not() => _NotStep<T, S>(this);
 
   @override
-  QueryStep<T> equals(dynamic value) => _queryStep({r'$eq': value});
+  S equals(dynamic value) => createNextStep({r'$eq': value});
 
   @override
-  QueryStep<T> like(String expression) => _queryStep(
+  S like(String expression) => createNextStep(
       {r'$regex': expression.replaceAll('%', '.*'), r'$options': 'i'});
 
   @override
-  QueryStep<T> gt(dynamic value) => _queryStep({r'$gt': value});
+  S gt(dynamic value) => createNextStep({r'$gt': value});
 
   @override
-  QueryStep<T> gte(dynamic value) => _queryStep({r'$gte': value});
+  S gte(dynamic value) => createNextStep({r'$gte': value});
 
   @override
-  QueryStep<T> lt(dynamic value) => _queryStep({r'$lt': value});
+  S lt(dynamic value) => createNextStep({r'$lt': value});
 
   @override
-  QueryStep<T> lte(dynamic value) => _queryStep({r'$lte': value});
+  S lte(dynamic value) => createNextStep({r'$lte': value});
 
   @override
-  QueryStep<T> between(dynamic value1, dynamic value2) =>
-      _queryStep({r'$gt': value1, r'$lt': value2});
+  S between(dynamic value1, dynamic value2) =>
+      createNextStep({r'$gt': value1, r'$lt': value2});
 
   static String _translate(String field, Type type, Registry registry) =>
       !field.contains('.') && registry.lookup(type).isKey(field)
@@ -267,17 +339,33 @@ class _WhereStep<T> implements WhereStep<T> {
           : field;
 
   @override
-  QueryStep<T> in_(Iterable<dynamic> values) =>
-      _queryStep({r'$in': List.from(values)});
+  S in_(Iterable<dynamic> values) =>
+      createNextStep({r'$in': List.from(values)});
 
   @override
-  QueryStep<T> contains(dynamic value) => _queryStep({
+  S contains(dynamic value) => createNextStep({
         r'$all': [value]
       });
 }
 
-class _NotStep<T> extends _WhereStep<T> {
-  _NotStep(_WhereStep<T> whereStep) : super(whereStep.field, whereStep.query);
+class _QueryWhereStep<T> extends _WhereStep<T, _QueryStep<T>> {
+  _QueryWhereStep(String field, _QueryStep<T> query) : super(field, query);
+
+  @override
+  _QueryStep<T> createNextStep(Map<String, dynamic> selector) =>
+      _QueryStep<T>.withSelector(step, combine({field: selector}));
+}
+
+class _DeleteWhereStep<T> extends _WhereStep<T, _DeleteStep<T>> {
+  _DeleteWhereStep(String field, DeleteStep<T> delete) : super(field, delete);
+
+  @override
+  _DeleteStep<T> createNextStep(Map<String, dynamic> selector) =>
+      _DeleteStep<T>.withSelector(step, combine({field: selector}));
+}
+
+class _NotStep<T, S extends _TypedStep<T, S>> extends _WhereStep<T, S> {
+  _NotStep(_WhereStep<T, S> whereStep) : super(whereStep.field, whereStep.step);
 
   @override
   Map<String, dynamic> combine(Map<String, dynamic> selector) =>

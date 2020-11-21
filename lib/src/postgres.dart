@@ -238,6 +238,12 @@ class PostgresBox extends Box {
         .whenIs<Map>((map) => map.map((key, value) => MapEntry(key, _fromJson(value, dynamic))))
         .apply(json);
   }
+
+  @override
+  DeleteStep<T> deleteFrom<T>([Type type]) {
+    // TODO: implement deleteFrom
+    throw UnimplementedError();
+  }
 }
 
 class _SelectStep implements SelectStep {
@@ -267,13 +273,13 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
   OrderByStep<T> orderBy(String field) => _OrderByStep(field, this);
 
   @override
-  WhereStep<T> where(String field) => _WhereStep(field, this);
+  WhereStep<T, QueryStep<T>> where(String field) => _QueryWhereStep(field, this);
 
   @override
-  WhereStep<T> and(String field) => _AndStep(field, this);
+  WhereStep<T, QueryStep<T>> and(String field) => _AndStep(field, this);
 
   @override
-  WhereStep<T> or(String field) => _OrStep(field, this);
+  WhereStep<T, QueryStep<T>> or(String field) => _OrStep(field, this);
 
   String _index(String field) {
     var latest = _latestIndex[field] ?? 0;
@@ -296,10 +302,10 @@ class _JoinStep<T> implements JoinStep<T> {
   _JoinStep(this.type, this.query);
 
   @override
-  WhereStep<T> on(String field) => _JoinOnStep(field, type, query);
+  WhereStep<T, QueryStep<T>> on(String field) => _JoinOnStep(field, type, query);
 }
 
-class _JoinOnStep<T> extends _WhereStep<T> {
+class _JoinOnStep<T> extends _QueryWhereStep<T> {
   final Type type;
 
   _JoinOnStep(String field, this.type, _QueryStep<T> query) : super(field, query);
@@ -314,11 +320,11 @@ class _JoinOnStep<T> extends _WhereStep<T> {
   }
 }
 
-class _WhereStep<T> implements WhereStep<T> {
+class _QueryWhereStep<T> implements WhereStep<T, QueryStep<T>> {
   final String field;
   final _QueryStep<T> query;
 
-  _WhereStep(this.field, this.query);
+  _QueryWhereStep(this.field, this.query);
 
   String combine(String condition) => condition;
 
@@ -326,7 +332,7 @@ class _WhereStep<T> implements WhereStep<T> {
       query, combine(condition), Map.from(bindings)..addAll(query._bindings), query._latestIndex);
 
   @override
-  WhereStep<T> not() => _NotStep(this);
+  WhereStep<T, QueryStep<T>> not() => _NotStep(this);
 
   @override
   QueryStep<T> equals(dynamic value) {
@@ -410,7 +416,7 @@ class _WhereStep<T> implements WhereStep<T> {
           joinTable.alias != null ? joinTable.alias == name : query.box.registry.lookup(joinTable.type).name == name);
 }
 
-class _AndStep<T> extends _WhereStep<T> {
+class _AndStep<T> extends _QueryWhereStep<T> {
   _AndStep(String field, _QueryStep<T> query) : super(field, query);
 
   @override
@@ -418,15 +424,15 @@ class _AndStep<T> extends _WhereStep<T> {
       query._conditions != null ? '(${query._conditions} AND $conditions)' : conditions;
 }
 
-class _OrStep<T> extends _WhereStep<T> {
+class _OrStep<T> extends _QueryWhereStep<T> {
   _OrStep(String field, _QueryStep<T> query) : super(field, query);
 
   @override
   String combine(String conditions) => query._conditions != null ? '(${query._conditions} OR $conditions)' : conditions;
 }
 
-class _NotStep<T> extends _WhereStep<T> {
-  _NotStep(_WhereStep<T> whereStep) : super(whereStep.field, whereStep.query);
+class _NotStep<T> extends _QueryWhereStep<T> {
+  _NotStep(_QueryWhereStep<T> whereStep) : super(whereStep.field, whereStep.query);
 
   @override
   String combine(String conditions) => 'NOT $conditions';

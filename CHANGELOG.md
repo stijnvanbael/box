@@ -1,3 +1,7 @@
+0.3.1 Delete
+------------
+* [ ] DELETE FROM
+
 0.3.0+1 Latest versions
 -----------------------
 * [x] Bumped versions of dependencies
@@ -37,6 +41,7 @@
 
 Backlog
 -------
+* [ ] Convert types like enums and DateTime in queries and deletes
 * [ ] Create indexes for memory, file, MongoDB and Firestore
 * [ ] Group by
 * [ ] Having

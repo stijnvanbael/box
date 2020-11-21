@@ -13,7 +13,8 @@ class FirestoreBox extends Box {
   final String version;
   _Connection _connection;
 
-  FirestoreBox(this.accountKeyFile, Registry registry, {this.version = 'v1'}) : super(registry);
+  FirestoreBox(this.accountKeyFile, Registry registry, {this.version = 'v1'})
+      : super(registry);
 
   @override
   Future close() async => _connection?.close();
@@ -72,7 +73,8 @@ class FirestoreBox extends Box {
       var keyFile = File(accountKeyFile);
       var keys = jsonDecode(await keyFile.readAsString());
       var credentials = ServiceAccountCredentials.fromJson(keys);
-      var client = await clientViaServiceAccount(credentials, ['https://www.googleapis.com/auth/datastore']);
+      var client = await clientViaServiceAccount(
+          credentials, ['https://www.googleapis.com/auth/datastore']);
       _connection = _Connection(client, keys['project_id'], version);
     }
     return _connection;
@@ -92,6 +94,12 @@ class FirestoreBox extends Box {
 
   @override
   bool get supportsIn => false;
+
+  @override
+  DeleteStep<T> deleteFrom<T>([Type type]) {
+    // TODO: implement deleteFrom
+    throw UnimplementedError();
+  }
 }
 
 class _SelectStep implements SelectStep {
@@ -105,22 +113,25 @@ class _SelectStep implements SelectStep {
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
-  _QueryStep(FirestoreBox box, Type type, List<Field> fields) : super(box, null, null, type, fields);
+  _QueryStep(FirestoreBox box, Type type, List<Field> fields)
+      : super(box, null, null, type, fields);
 
   _QueryStep.withFilter(_QueryStep<T> query, Map<String, dynamic> filter)
-      : super(query.box, filter, query._order, query._type, query._selectFields);
+      : super(
+            query.box, filter, query._order, query._type, query._selectFields);
 
   @override
-  WhereStep<T> and(String field) => _AndStep(field, this);
+  WhereStep<T, QueryStep<T>> and(String field) => _AndStep(field, this);
 
   @override
-  WhereStep<T> or(String field) => _OrStep(field, this);
+  WhereStep<T, QueryStep<T>> or(String field) => _OrStep(field, this);
 
   @override
   OrderByStep<T> orderBy(String field) => _OrderByStep(field, this);
 
   @override
-  WhereStep<T> where(String field) => _WhereStep(field, this);
+  WhereStep<T, QueryStep<T>> where(String field) =>
+      _QueryWhereStep(field, this);
 
   @override
   JoinStep<T> innerJoin(Type type, [String alias]) {
@@ -129,18 +140,20 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
   }
 }
 
-class _WhereStep<T> implements WhereStep<T> {
+class _QueryWhereStep<T> implements WhereStep<T, QueryStep<T>> {
   final String field;
   final _QueryStep<T> query;
 
-  _WhereStep(this.field, this.query);
+  _QueryWhereStep(this.field, this.query);
 
-  QueryStep<T> _queryStep(Map<String, dynamic> filter) => _QueryStep<T>.withFilter(query, combine(filter));
+  QueryStep<T> _queryStep(Map<String, dynamic> filter) =>
+      _QueryStep<T>.withFilter(query, combine(filter));
 
   Map<String, dynamic> combine(Map<String, dynamic> selector) => selector;
 
   @override
-  QueryStep<T> between(dynamic value1, dynamic value2) => gt(value1).and(field).lt(value2);
+  QueryStep<T> between(dynamic value1, dynamic value2) =>
+      gt(value1).and(field).lt(value2);
 
   @override
   QueryStep<T> equals(dynamic value) => _fieldFilter('EQUAL', value);
@@ -149,7 +162,8 @@ class _WhereStep<T> implements WhereStep<T> {
   QueryStep<T> gt(dynamic value) => _fieldFilter('GREATER_THAN', value);
 
   @override
-  QueryStep<T> gte(dynamic value) => _fieldFilter('GREATER_THAN_OR_EQUAL', value);
+  QueryStep<T> gte(dynamic value) =>
+      _fieldFilter('GREATER_THAN_OR_EQUAL', value);
 
   @override
   QueryStep<T> like(String expression) {
@@ -168,7 +182,7 @@ class _WhereStep<T> implements WhereStep<T> {
   }
 
   @override
-  WhereStep<T> not() {
+  WhereStep<T, QueryStep<T>> not() {
     throw UnimplementedError('Not is not supported');
   }
 
@@ -184,32 +198,34 @@ class _WhereStep<T> implements WhereStep<T> {
       });
 }
 
-class _OrStep<T> extends _WhereStep<T> {
+class _OrStep<T> extends _QueryWhereStep<T> {
   _OrStep(String field, _QueryStep<T> query) : super(field, query);
 
   @override
-  Map<String, dynamic> combine(Map<String, dynamic> filter) => query._filter != null
-      ? {
-          'compositeFilter': {
-            'op': 'OR',
-            'filters': [query._filter, filter]
-          }
-        }
-      : filter;
+  Map<String, dynamic> combine(Map<String, dynamic> filter) =>
+      query._filter != null
+          ? {
+              'compositeFilter': {
+                'op': 'OR',
+                'filters': [query._filter, filter]
+              }
+            }
+          : filter;
 }
 
-class _AndStep<T> extends _WhereStep<T> {
+class _AndStep<T> extends _QueryWhereStep<T> {
   _AndStep(String field, _QueryStep<T> query) : super(field, query);
 
   @override
-  Map<String, dynamic> combine(Map<String, dynamic> filter) => query._filter != null
-      ? {
-          'compositeFilter': {
-            'op': 'AND',
-            'filters': [query._filter, filter]
-          }
-        }
-      : filter;
+  Map<String, dynamic> combine(Map<String, dynamic> filter) =>
+      query._filter != null
+          ? {
+              'compositeFilter': {
+                'op': 'AND',
+                'filters': [query._filter, filter]
+              }
+            }
+          : filter;
 }
 
 class _OrderByStep<T> implements OrderByStep<T> {
@@ -245,13 +261,15 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
   final Type _type;
   final List<Field> _selectFields;
 
-  _ExpectationStep(this.box, this._filter, this._order, this._type, this._selectFields);
+  _ExpectationStep(
+      this.box, this._filter, this._order, this._type, this._selectFields);
 
   @override
   Stream<T> stream({int limit, int offset}) async* {
     var entitySupport = box.registry.lookup(_type);
     var connection = await box._connect();
-    var documents = (await connection.query(_selectFields, entitySupport.name, _filter, _order, limit, offset));
+    var documents = (await connection.query(
+        _selectFields, entitySupport.name, _filter, _order, limit, offset));
     for (var document in documents) {
       if (_selectFields.isEmpty) {
         yield entitySupport.deserialize(document);
@@ -279,9 +297,11 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
     return result;
   }
 
-  dynamic _getValue(Map<String, dynamic> document, String name) => name.contains('.')
-      ? _getValue(_getValue(document, name.substring(0, name.indexOf('.'))), name.substring(name.indexOf('.') + 1))
-      : document[name];
+  dynamic _getValue(Map<String, dynamic> document, String name) =>
+      name.contains('.')
+          ? _getValue(_getValue(document, name.substring(0, name.indexOf('.'))),
+              name.substring(name.indexOf('.') + 1))
+          : document[name];
 }
 
 class _Connection {
@@ -297,30 +317,36 @@ class _Connection {
       throw 'Error deleting $documentType $key: ${response.statusCode}\n${response.body}';
     }
     var documents = jsonDecode(response.body)['documents'] ?? [];
-    return List<_Document>.from(documents.map((map) => _Document.fromJson(map)));
+    return List<_Document>.from(
+        documents.map((map) => _Document.fromJson(map)));
   }
 
   Future delete(String documentType, String key) async {
-    var response = await _client.delete('$_urlPrefix/documents/$documentType/$key');
+    var response =
+        await _client.delete('$_urlPrefix/documents/$documentType/$key');
     if (response.statusCode >= 400) {
       throw 'Error deleting $documentType $key: ${response.statusCode}\n${response.body}';
     }
   }
 
-  Future patch(String documentType, String key, Map<String, dynamic> document) async {
-    var response =
-        await _client.patch('$_urlPrefix/documents/$documentType/$key', body: jsonEncode(_wrap(document)['mapValue']));
+  Future patch(
+      String documentType, String key, Map<String, dynamic> document) async {
+    var response = await _client.patch(
+        '$_urlPrefix/documents/$documentType/$key',
+        body: jsonEncode(_wrap(document)['mapValue']));
     if (response.statusCode >= 400) {
       throw 'Error patching $documentType $key: ${response.statusCode}\n${response.body}';
     }
   }
 
-  String get _urlPrefix => 'https://firestore.googleapis.com/$_version/projects/$_projectId/databases/(default)';
+  String get _urlPrefix =>
+      'https://firestore.googleapis.com/$_version/projects/$_projectId/databases/(default)';
 
   void close() => _client.close();
 
   Future<Map<String, dynamic>> get(String documentType, String key) async {
-    var response = await _client.get('$_urlPrefix/documents/$documentType/$key');
+    var response =
+        await _client.get('$_urlPrefix/documents/$documentType/$key');
     if (response.statusCode == 404) {
       return null;
     }
@@ -330,8 +356,13 @@ class _Connection {
     return _unwrap({'mapValue': jsonDecode(response.body)});
   }
 
-  Future<List<Map<String, dynamic>>> query(List<Field> selectFields, String documentType, Map<String, dynamic> filter,
-      List<Map<String, dynamic>> order, int limit, int offset) async {
+  Future<List<Map<String, dynamic>>> query(
+      List<Field> selectFields,
+      String documentType,
+      Map<String, dynamic> filter,
+      List<Map<String, dynamic>> order,
+      int limit,
+      int offset) async {
     var query = {
       'from': [
         {'collectionId': documentType}
@@ -343,16 +374,20 @@ class _Connection {
     };
     if (selectFields.isNotEmpty) {
       query['select'] = {
-        'fields': selectFields.map((field) => {'fieldPath': field.name}).toList()
+        'fields':
+            selectFields.map((field) => {'fieldPath': field.name}).toList()
       };
     }
-    var response = await _client.post('$_urlPrefix/documents:runQuery', body: jsonEncode({'structuredQuery': query}));
+    var response = await _client.post('$_urlPrefix/documents:runQuery',
+        body: jsonEncode({'structuredQuery': query}));
     if (response.statusCode >= 400) {
       throw 'Error querying $documentType $key: ${response.statusCode}\n${response.body}';
     }
     var documents = jsonDecode(response.body);
     return List<Map<String, dynamic>>.from(documents
-        .map((map) => map.containsKey('document') ? _unwrap({'mapValue': map['document']}) : null)
+        .map((map) => map.containsKey('document')
+            ? _unwrap({'mapValue': map['document']})
+            : null)
         .where((element) => element != null));
   }
 }
@@ -364,7 +399,9 @@ dynamic _wrap(dynamic object) {
     return {'nullValue': null};
   } else if (object is Map) {
     return {
-      'mapValue': {'fields': object.map((key, value) => MapEntry(key, _wrap(value)))}
+      'mapValue': {
+        'fields': object.map((key, value) => MapEntry(key, _wrap(value)))
+      }
     };
   } else if (object is List) {
     return {
@@ -382,9 +419,11 @@ dynamic _unwrap(dynamic object) {
     } else if (object.containsKey('nullValue')) {
       return null;
     } else if (object.containsKey('mapValue')) {
-      return Map<String, dynamic>.from(object['mapValue']['fields'].map((key, value) => MapEntry(key, _unwrap(value))));
+      return Map<String, dynamic>.from(object['mapValue']['fields']
+          .map((key, value) => MapEntry(key, _unwrap(value))));
     } else if (object.containsKey('values')) {
-      return List.from(object['arrayValue']['values'].map((value) => _unwrap(value)));
+      return List.from(
+          object['arrayValue']['values'].map((value) => _unwrap(value)));
     }
   } else {
     return object;

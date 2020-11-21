@@ -53,6 +53,11 @@ class MemoryBox extends Box {
 
   @override
   Future close() async {}
+
+  @override
+  DeleteStep<T> deleteFrom<T>([Type type]) {
+    throw UnimplementedError();
+  }
 }
 
 class _SelectStep implements SelectStep {
@@ -72,16 +77,16 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
       : super(query.box, type, query.selectFields, predicate);
 
   @override
-  WhereStep<T> where(String field) => _WhereStep(field, this);
+  WhereStep<T,QueryStep<T>> where(String field) => _QueryWhereStep(field, this);
 
   @override
   OrderByStep<T> orderBy(String field) => _OrderByStep(field, this);
 
   @override
-  WhereStep<T> and(String field) => _AndStep(field, this);
+  WhereStep<T,QueryStep<T>> and(String field) => _AndStep(field, this);
 
   @override
-  WhereStep<T> or(String field) => _OrStep(field, this);
+  WhereStep<T,QueryStep<T>> or(String field) => _OrStep(field, this);
 
   @override
   JoinStep<T> innerJoin(Type type, [String alias]) {
@@ -90,14 +95,14 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
   }
 }
 
-class _OrStep<T> extends _WhereStep<T> {
+class _OrStep<T> extends _QueryWhereStep<T> {
   _OrStep(String field, _QueryStep<T> query) : super(field, query);
 
   @override
   Predicate<T> combine(Predicate<T> predicate) => query.predicate != null ? query.predicate.or(predicate) : predicate;
 }
 
-class _AndStep<T> extends _WhereStep<T> {
+class _AndStep<T> extends _QueryWhereStep<T> {
   _AndStep(String field, _QueryStep<T> query) : super(field, query);
 
   @override
@@ -134,16 +139,16 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
   }
 }
 
-class _WhereStep<T> implements WhereStep<T> {
+class _QueryWhereStep<T> implements WhereStep<T, QueryStep<T>> {
   final String field;
   final _QueryStep<T> query;
 
-  _WhereStep(this.field, this.query);
+  _QueryWhereStep(this.field, this.query);
 
   Predicate<T> combine(Predicate<T> predicate) => predicate;
 
   @override
-  WhereStep<T> not() => _NotStep<T>(this);
+  WhereStep<T, QueryStep<T>> not() => _NotStep<T>(this);
 
   @override
   QueryStep<T> like(String expression) => _queryStep(_LikePredicate(field, expression, query.box.registry));
@@ -176,8 +181,8 @@ class _WhereStep<T> implements WhereStep<T> {
   QueryStep<T> _queryStep(Predicate<T> predicate) => _QueryStep.withPredicate(query, combine(predicate), query._type);
 }
 
-class _NotStep<T> extends _WhereStep<T> {
-  _NotStep(_WhereStep<T> whereStep) : super(whereStep.field, whereStep.query);
+class _NotStep<T> extends _QueryWhereStep<T> {
+  _NotStep(_QueryWhereStep<T> whereStep) : super(whereStep.field, whereStep.query);
 
   @override
   Predicate<T> combine(Predicate<T> predicate) => predicate.not();

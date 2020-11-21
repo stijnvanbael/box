@@ -21,6 +21,10 @@ abstract class Box {
     }
   }
 
+  /// Inserts all specified entities of the same type in this Box.
+  Future insertAll<T>(Iterable<T> entities) =>
+      storeAll(entities); // TODO: implement correctly
+
   /// Returns the key of the specified entity.
   dynamic keyOf(dynamic entity) =>
       registry.lookup(entity.runtimeType).getKey(entity);
@@ -36,6 +40,9 @@ abstract class Box {
 
   /// Deletes all entities of the specified type from this Box.
   Future deleteAll<T>([Type type]);
+
+  /// Starts a new delete statement with a condition. SQL equivalent DELETE FROM <type>
+  DeleteStep<T> deleteFrom<T>([Type type]);
 
   /// Closes the underlying connection of this Box. After closing, a Box can no longer be used.
   Future close();
@@ -61,59 +68,75 @@ abstract class SelectStep {
   QueryStep from(Type type, [String alias]);
 }
 
+abstract class DeleteStep<T> {
+  /// Adds a condition to this delete for the specified field. SQL: WHERE <field>
+  WhereStep<T, DeleteStep<T>> where(String field);
+
+  /// Adds another condition to this delete for the specified field. Only results that match both the previous condition
+  /// and the next will be deleted. SQL: AND <field>
+  WhereStep<T, DeleteStep<T>> and(String field);
+
+  /// Adds another condition to this delete for the specified field. Both results that match the previous condition
+  /// and the next will be deleted. SQL: OR <field>
+  WhereStep<T, DeleteStep<T>> or(String field);
+
+  /// Executes the delete with the specified conditions.
+  Future execute();
+}
+
 abstract class QueryStep<T> extends ExpectationStep<T> {
   /// Adds a condition to this query for the specified field. SQL: WHERE <field>
-  WhereStep<T> where(String field);
+  WhereStep<T, QueryStep<T>> where(String field);
 
   /// Adds a sort order to this query for the specified field. SQL: ORDER BY <field>
   OrderByStep<T> orderBy(String field);
 
   /// Adds another condition to this query for the specified field. Only results that match both the previous condition
   /// and the next will be returned from the query. SQL: AND <field>
-  WhereStep<T> and(String field);
+  WhereStep<T, QueryStep<T>> and(String field);
 
   /// Adds another condition to this query for the specified field. Both results that match the previous condition
   /// and the next will be returned from the query. SQL: OR <field>
-  WhereStep<T> or(String field);
+  WhereStep<T, QueryStep<T>> or(String field);
 
   JoinStep<T> innerJoin(Type type, [String alias]);
 }
 
 abstract class JoinStep<T> {
-  WhereStep<T> on(String field);
+  WhereStep<T, QueryStep<T>> on(String field);
 }
 
-abstract class WhereStep<T> {
+abstract class WhereStep<T, S> {
   /// Negates the next condition. SQL: NOT <condition>
-  WhereStep<T> not();
+  WhereStep<T, S> not();
 
   /// Query condition that matches parts of a string using % as wildcard. SQL: LIKE <expression>
-  QueryStep<T> like(String expression);
+  S like(String expression);
 
   /// Query condition that matches all values equal to the specified value. SQL: =
-  QueryStep<T> equals(dynamic value);
+  S equals(dynamic value);
 
   /// Query condition that matches all values greater than the specified value. SQL: >
-  QueryStep<T> gt(dynamic value);
+  S gt(dynamic value);
 
   /// Query condition that matches all values greater than or equal to the specified value. SQL: >=
-  QueryStep<T> gte(dynamic value);
+  S gte(dynamic value);
 
   /// Query condition that matches all values less than the specified value. SQL: <
-  QueryStep<T> lt(dynamic value);
+  S lt(dynamic value);
 
   /// Query condition that matches all values less than or equal to the specified value. SQL: <=
-  QueryStep<T> lte(dynamic value);
+  S lte(dynamic value);
 
   /// Query condition that matches all values greater than the first value and less than the second value.
   /// SQL: BETWEEN <value1> AND <value2>
-  QueryStep<T> between(dynamic value1, dynamic value2);
+  S between(dynamic value1, dynamic value2);
 
   /// Query condition that matches any value in the specified list of values. SQL: IN(<values>)
-  QueryStep<T> in_(Iterable<dynamic> values);
+  S in_(Iterable<dynamic> values);
 
   /// Query condition that matches any string that contains the specified value.
-  QueryStep<T> contains(dynamic value);
+  S contains(dynamic value);
 }
 
 abstract class OrderByStep<T> {
