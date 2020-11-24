@@ -268,6 +268,23 @@ class Entity {
 
 const entity = Entity();
 
+enum Direction { ascending, descending }
+
+const index = Index();
+
+class Index {
+  final List<IndexField> fields;
+
+  const Index([this.fields]);
+}
+
+class IndexField {
+  final String name;
+  final Direction direction;
+
+  const IndexField(this.name, [this.direction = Direction.ascending]);
+}
+
 class Field {
   final String name;
   final String alias;
