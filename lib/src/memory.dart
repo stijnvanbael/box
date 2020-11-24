@@ -20,14 +20,19 @@ class MemoryBox extends Box {
   @override
   Future<T> find<T>(key, [Type type]) async {
     return entitiesFor(type ?? T).then((entitiesForType) {
-      return entitiesForType != null ? entitiesForType[key is Map ? Composite(key) : key] : null;
+      return entitiesForType != null
+          ? entitiesForType[key is Map ? Composite(key) : key]
+          : null;
     });
   }
 
   Stream<T> _query<T>(Type type, Predicate predicate, _Ordering ordering) {
     return Stream.fromFuture(entitiesFor(type).then((entities) {
-      var list = List<T>.from(entities.values.where((item) => predicate != null ? predicate.evaluate(item) : true));
-      if (ordering != null) list.sort((object1, object2) => ordering.compare(object1, object2));
+      var list = List<T>.from(entities.values.where(
+          (item) => predicate != null ? predicate.evaluate(item) : true));
+      if (ordering != null) {
+        list.sort((object1, object2) => ordering.compare(object1, object2));
+      }
       return list;
     })).expand((list) => list);
   }
@@ -36,9 +41,8 @@ class MemoryBox extends Box {
   SelectStep select(List<Field> fields) => _SelectStep(this, fields);
 
   @override
-  _QueryStep<T> selectFrom<T>([Type type, String alias]) {
-    return _QueryStep<T>(this, type);
-  }
+  _QueryStep<T> selectFrom<T>([Type type, String alias]) =>
+      _QueryStep<T>(this, type);
 
   Future<Map> entitiesFor(Type type) {
     var entitySupport = registry.lookup(type);
@@ -47,17 +51,51 @@ class MemoryBox extends Box {
   }
 
   @override
-  Future deleteAll<T>([Type type]) async {
-    return (await entitiesFor(T ?? type)).clear();
-  }
+  Future deleteAll<T>([Type type]) async =>
+      (await entitiesFor(T ?? type)).clear();
 
   @override
   Future close() async {}
 
   @override
-  DeleteStep<T> deleteFrom<T>([Type type]) {
-    throw UnimplementedError();
-  }
+  DeleteStep<T> deleteFrom<T>([Type type]) => _DeleteStep<T>(this, type ?? T);
+}
+
+class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
+    implements DeleteStep<T> {
+  @override
+  final MemoryBox box;
+  @override
+  final Type type;
+  @override
+  final Predicate<T> predicate;
+
+  _DeleteStep(this.box, this.type) : predicate = null;
+
+  @override
+  _DeleteStep<T> addPredicate(Predicate<T> predicate) =>
+      _DeleteStep.withPredicate(this, predicate);
+
+  _DeleteStep.withPredicate(_DeleteStep<T> step, Predicate<T> predicate)
+      : box = step.box,
+        type = step.type,
+        predicate = predicate;
+
+  @override
+  Future execute() async => (await box.entitiesFor(type))
+      .removeWhere((key, value) => predicate.evaluate(value));
+
+  @override
+  WhereStep<T, DeleteStep<T>> where(String field) =>
+      _DeleteWhereStep(field, this);
+}
+
+class _DeleteWhereStep<T> extends _WhereStep<T, _DeleteStep<T>> {
+  _DeleteWhereStep(String field, DeleteStep<T> delete) : super(field, delete);
+
+  @override
+  _DeleteStep<T> createNextStep(Predicate<T> predicate) =>
+      _DeleteStep<T>.withPredicate(step, combine(predicate));
 }
 
 class _SelectStep implements SelectStep {
@@ -70,43 +108,61 @@ class _SelectStep implements SelectStep {
   _QueryStep from(Type type, [String alias]) => _QueryStep(_box, type, _fields);
 }
 
-class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
-  _QueryStep(Box box, [Type type, List<Field> selectFields]) : super(box, type ?? T, selectFields);
+abstract class _TypedStep<T, S extends _TypedStep<T, S>> {
+  Type get type;
 
-  _QueryStep.withPredicate(_QueryStep<T> query, Predicate<T> predicate, Type type)
-      : super(query.box, type, query.selectFields, predicate);
+  MemoryBox get box;
+
+  Predicate<T> get predicate;
+
+  WhereStep<T, S> and(String field) => _AndStep(field, this);
+
+  WhereStep<T, S> or(String field) => _OrStep(field, this);
+
+  S addPredicate(Predicate<T> predicate);
+}
+
+class _QueryStep<T> extends _ExpectationStep<T>
+    with _TypedStep<T, _QueryStep<T>>
+    implements QueryStep<T> {
+  _QueryStep(Box box, [Type type, List<Field> selectFields])
+      : super(box, type ?? T, selectFields);
+
+  _QueryStep.withPredicate(_QueryStep<T> query, Predicate<T> predicate)
+      : super(query.box, query.type, query.selectFields, predicate);
 
   @override
-  WhereStep<T,QueryStep<T>> where(String field) => _QueryWhereStep(field, this);
+  WhereStep<T, QueryStep<T>> where(String field) =>
+      _QueryWhereStep(field, this);
 
   @override
   OrderByStep<T> orderBy(String field) => _OrderByStep(field, this);
-
-  @override
-  WhereStep<T,QueryStep<T>> and(String field) => _AndStep(field, this);
-
-  @override
-  WhereStep<T,QueryStep<T>> or(String field) => _OrStep(field, this);
 
   @override
   JoinStep<T> innerJoin(Type type, [String alias]) {
     // TODO: implement innerJoin
     throw UnimplementedError();
   }
-}
-
-class _OrStep<T> extends _QueryWhereStep<T> {
-  _OrStep(String field, _QueryStep<T> query) : super(field, query);
 
   @override
-  Predicate<T> combine(Predicate<T> predicate) => query.predicate != null ? query.predicate.or(predicate) : predicate;
+  _QueryStep<T> addPredicate(Predicate<T> predicate) =>
+      _QueryStep.withPredicate(this, predicate);
 }
 
-class _AndStep<T> extends _QueryWhereStep<T> {
-  _AndStep(String field, _QueryStep<T> query) : super(field, query);
+class _OrStep<T, S extends _TypedStep<T, S>> extends _WhereStep<T, S> {
+  _OrStep(String field, S step) : super(field, step);
 
   @override
-  Predicate<T> combine(Predicate<T> predicate) => query.predicate != null ? query.predicate.and(predicate) : predicate;
+  Predicate<T> combine(Predicate<T> predicate) =>
+      step.predicate != null ? step.predicate.or(predicate) : predicate;
+}
+
+class _AndStep<T, S extends _TypedStep<T, S>> extends _WhereStep<T, S> {
+  _AndStep(String field, S step) : super(field, step);
+
+  @override
+  Predicate<T> combine(Predicate<T> predicate) =>
+      step.predicate != null ? step.predicate.and(predicate) : predicate;
 }
 
 class _ExpectationStep<T> extends ExpectationStep<T> {
@@ -117,11 +173,16 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
   final Type _type;
   final List<Field> selectFields;
 
-  _ExpectationStep(this.box, [this._type, this.selectFields, this.predicate, this.ordering]);
+  _ExpectationStep(this.box,
+      [this._type, this.selectFields, this.predicate, this.ordering]);
 
   @override
   Stream<T> stream({int limit = 1000000, int offset = 0}) {
-    return box._query(_type, predicate, ordering).skip(offset).take(limit).map(_selectFields);
+    return box
+        ._query(_type, predicate, ordering)
+        .skip(offset)
+        .take(limit)
+        .map(_selectFields);
   }
 
   @override
@@ -135,54 +196,74 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
     if (selectFields == null) {
       return record;
     }
-    return {for (var field in selectFields) field.alias: box.registry.getFieldValue(field.name, record)} as T;
+    return {
+      for (var field in selectFields)
+        field.alias: box.registry.getFieldValue(field.name, record)
+    } as T;
   }
 }
 
-class _QueryWhereStep<T> implements WhereStep<T, QueryStep<T>> {
+class _WhereStep<T, S extends _TypedStep<T, S>> implements WhereStep<T, S> {
   final String field;
-  final _QueryStep<T> query;
+  final S step;
 
-  _QueryWhereStep(this.field, this.query);
+  _WhereStep(this.field, this.step);
 
   Predicate<T> combine(Predicate<T> predicate) => predicate;
 
   @override
-  WhereStep<T, QueryStep<T>> not() => _NotStep<T>(this);
+  WhereStep<T, S> not() => _NotStep<T, S>(this);
 
   @override
-  QueryStep<T> like(String expression) => _queryStep(_LikePredicate(field, expression, query.box.registry));
+  S like(String expression) =>
+      createNextStep(_LikePredicate(field, expression, step.box.registry));
 
   @override
-  QueryStep<T> equals(dynamic value) => _queryStep(_EqualsPredicate(field, value, query.box.registry));
+  S equals(dynamic value) =>
+      createNextStep(_EqualsPredicate(field, value, step.box.registry));
 
   @override
-  QueryStep<T> gt(dynamic value) => _queryStep(_GreaterThanPredicate(field, value, query.box.registry));
+  S gt(dynamic value) =>
+      createNextStep(_GreaterThanPredicate(field, value, step.box.registry));
 
   @override
-  QueryStep<T> gte(dynamic value) => _queryStep(_GreaterThanOrEqualsPredicate(field, value, query.box.registry));
+  S gte(dynamic value) => createNextStep(
+      _GreaterThanOrEqualsPredicate(field, value, step.box.registry));
 
   @override
-  QueryStep<T> lt(dynamic value) => _queryStep(_LessThanPredicate(field, value, query.box.registry));
+  S lt(dynamic value) =>
+      createNextStep(_LessThanPredicate(field, value, step.box.registry));
 
   @override
-  QueryStep<T> lte(dynamic value) => _queryStep(_LessThanOrEqualsPredicate(field, value, query.box.registry));
+  S lte(dynamic value) => createNextStep(
+      _LessThanOrEqualsPredicate(field, value, step.box.registry));
 
   @override
-  QueryStep<T> between(dynamic value1, dynamic value2) =>
-      _queryStep(_BetweenPredicate(field, value1, value2, query.box.registry));
+  S between(dynamic value1, dynamic value2) => createNextStep(
+      _BetweenPredicate(field, value1, value2, step.box.registry));
 
   @override
-  QueryStep<T> in_(Iterable<dynamic> values) => _queryStep(_InPredicate(field, values, query.box.registry));
+  S in_(Iterable<dynamic> values) =>
+      createNextStep(_InPredicate(field, values, step.box.registry));
 
   @override
-  QueryStep<T> contains(dynamic value) => _queryStep(_ContainsPredicate(field, value, query.box.registry));
+  S contains(dynamic value) =>
+      createNextStep(_ContainsPredicate(field, value, step.box.registry));
 
-  QueryStep<T> _queryStep(Predicate<T> predicate) => _QueryStep.withPredicate(query, combine(predicate), query._type);
+  S createNextStep(Predicate<T> predicate) =>
+      step.addPredicate(combine(predicate));
 }
 
-class _NotStep<T> extends _QueryWhereStep<T> {
-  _NotStep(_QueryWhereStep<T> whereStep) : super(whereStep.field, whereStep.query);
+class _QueryWhereStep<T> extends _WhereStep<T, _QueryStep<T>> {
+  _QueryWhereStep(String field, _QueryStep<T> query) : super(field, query);
+
+  @override
+  _QueryStep<T> createNextStep(Predicate<T> predicate) =>
+      _QueryStep<T>.withPredicate(step, combine(predicate));
+}
+
+class _NotStep<T, S extends _TypedStep<T, S>> extends _WhereStep<T, S> {
+  _NotStep(_WhereStep<T, S> whereStep) : super(whereStep.field, whereStep.step);
 
   @override
   Predicate<T> combine(Predicate<T> predicate) => predicate.not();
@@ -196,15 +277,24 @@ class _OrderByStep<T> implements OrderByStep<T> {
 
   @override
   ExpectationStep<T> ascending() => _ExpectationStep(
-      query.box, query.type, query.selectFields, query.predicate, _Ascending(query.type, field, query.box.registry));
+      query.box,
+      query.type,
+      query.selectFields,
+      query.predicate,
+      _Ascending(query.type, field, query.box.registry));
 
   @override
   ExpectationStep<T> descending() => _ExpectationStep(
-      query.box, query.type, query.selectFields, query.predicate, _Descending(query.type, field, query.box.registry));
+      query.box,
+      query.type,
+      query.selectFields,
+      query.predicate,
+      _Descending(query.type, field, query.box.registry));
 }
 
 class _Ascending<T> extends _Ordering<T> {
-  _Ascending(Type type, String field, Registry registry) : super(type, field, registry);
+  _Ascending(Type type, String field, Registry registry)
+      : super(type, field, registry);
 
   @override
   int compare(T object1, T object2) {
@@ -215,7 +305,8 @@ class _Ascending<T> extends _Ordering<T> {
 }
 
 class _Descending<T> extends _Ordering<T> {
-  _Descending(Type type, String field, Registry registry) : super(type, field, registry);
+  _Descending(Type type, String field, Registry registry)
+      : super(type, field, registry);
 
   @override
   int compare(T object1, T object2) {
@@ -239,7 +330,10 @@ abstract class _Ordering<T> {
 
 class _LikePredicate<T> extends _ExpressionPredicate<T, RegExp> {
   _LikePredicate(String field, String expression, Registry registry)
-      : super(field, RegExp(expression.replaceAll('%', '.*'), caseSensitive: false), registry);
+      : super(
+            field,
+            RegExp(expression.replaceAll('%', '.*'), caseSensitive: false),
+            registry);
 
   @override
   bool evaluate(T object) {
@@ -249,7 +343,8 @@ class _LikePredicate<T> extends _ExpressionPredicate<T, RegExp> {
 }
 
 class _EqualsPredicate<T, E> extends _ExpressionPredicate<T, E> {
-  _EqualsPredicate(String field, E expression, Registry registry) : super(field, expression, registry);
+  _EqualsPredicate(String field, E expression, Registry registry)
+      : super(field, expression, registry);
 
   @override
   bool evaluate(T object) {
@@ -259,7 +354,8 @@ class _EqualsPredicate<T, E> extends _ExpressionPredicate<T, E> {
 }
 
 abstract class _ComparingPredicate<T> extends _ExpressionPredicate<T, dynamic> {
-  _ComparingPredicate(String field, dynamic expression, Registry registry) : super(field, expression, registry);
+  _ComparingPredicate(String field, dynamic expression, Registry registry)
+      : super(field, expression, registry);
 
   @override
   bool evaluate(T object) {
@@ -277,14 +373,16 @@ abstract class _ComparingPredicate<T> extends _ExpressionPredicate<T, dynamic> {
 }
 
 class _GreaterThanPredicate<T> extends _ComparingPredicate<T> {
-  _GreaterThanPredicate(String field, dynamic expression, Registry registry) : super(field, expression, registry);
+  _GreaterThanPredicate(String field, dynamic expression, Registry registry)
+      : super(field, expression, registry);
 
   @override
   bool compare(int value) => value > 0;
 }
 
 class _GreaterThanOrEqualsPredicate<T> extends _ComparingPredicate<T> {
-  _GreaterThanOrEqualsPredicate(String field, dynamic expression, Registry registry)
+  _GreaterThanOrEqualsPredicate(
+      String field, dynamic expression, Registry registry)
       : super(field, expression, registry);
 
   @override
@@ -292,14 +390,17 @@ class _GreaterThanOrEqualsPredicate<T> extends _ComparingPredicate<T> {
 }
 
 class _LessThanPredicate<T> extends _ComparingPredicate<T> {
-  _LessThanPredicate(String field, dynamic expression, Registry registry) : super(field, expression, registry);
+  _LessThanPredicate(String field, dynamic expression, Registry registry)
+      : super(field, expression, registry);
 
   @override
   bool compare(int value) => value < 0;
 }
 
 class _LessThanOrEqualsPredicate<T> extends _ComparingPredicate<T> {
-  _LessThanOrEqualsPredicate(String field, dynamic expression, Registry registry) : super(field, expression, registry);
+  _LessThanOrEqualsPredicate(
+      String field, dynamic expression, Registry registry)
+      : super(field, expression, registry);
 
   @override
   bool compare(int value) => value <= 0;
@@ -309,16 +410,19 @@ class _BetweenPredicate<T> extends Predicate<T> {
   final Predicate<T> _lowerBound;
   final Predicate<T> _upperBound;
 
-  _BetweenPredicate(String field, dynamic value1, dynamic value2, Registry registry)
+  _BetweenPredicate(
+      String field, dynamic value1, dynamic value2, Registry registry)
       : _lowerBound = _GreaterThanPredicate(field, value1, registry),
         _upperBound = _LessThanPredicate(field, value2, registry);
 
   @override
-  bool evaluate(T object) => _lowerBound.evaluate(object) && _upperBound.evaluate(object);
+  bool evaluate(T object) =>
+      _lowerBound.evaluate(object) && _upperBound.evaluate(object);
 }
 
 class _InPredicate<T, E> extends _ExpressionPredicate<T, List<E>> {
-  _InPredicate(String field, List<E> values, Registry registry) : super(field, values, registry);
+  _InPredicate(String field, List<E> values, Registry registry)
+      : super(field, values, registry);
 
   @override
   bool evaluate(T object) {
@@ -328,7 +432,8 @@ class _InPredicate<T, E> extends _ExpressionPredicate<T, List<E>> {
 }
 
 class _ContainsPredicate<T, E> extends _ExpressionPredicate<T, E> {
-  _ContainsPredicate(String field, E value, Registry registry) : super(field, value, registry);
+  _ContainsPredicate(String field, E value, Registry registry)
+      : super(field, value, registry);
 
   @override
   bool evaluate(T object) {

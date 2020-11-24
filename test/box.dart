@@ -5,6 +5,8 @@ import 'package:box/postgres.dart';
 import 'package:collection/collection.dart';
 import 'package:test/test.dart';
 
+import 'delete.dart';
+
 part 'box.g.dart';
 
 var registry = Registry()
@@ -15,11 +17,17 @@ var registry = Registry()
 var firestore = FirestoreBox('.secrets/firestore.json', registry);
 
 void main() async {
-  await runTests('Memory', () => MemoryBox(registry));
-  await runTests('File', () => FileBox('.box/test', registry));
-  await runTests('MongoDB', () => MongoDbBox('mongodb://localhost:27017/box_test', registry));
-  await runTests('PostgreSQL', () => PostgresBox('localhost', registry, database: 'box_test_json'));
-  await runTests('Firestore', () => firestore);
+  var boxBuilders = {
+    'Memory': () => MemoryBox(registry),
+    'File': () => FileBox('.box/test', registry),
+    'PostgreSQL': () => PostgresBox('localhost', registry, database: 'box_test_json'),
+    'MongoDB': () => MongoDbBox('mongodb://localhost:27017/box_test', registry),
+    'Firestore': () => firestore,
+  };
+  for(var entry in boxBuilders.entries) {
+    await runTests(entry.key, entry.value);
+    await deleteTests(entry.key, entry.value);
+  }
 }
 
 void runTests(String name, Box Function() boxBuilder) async {

@@ -1,6 +1,6 @@
 0.3.1 Delete
 ------------
-* [ ] DELETE FROM
+* [x] DELETE FROM
 
 0.3.0+1 Latest versions
 -----------------------

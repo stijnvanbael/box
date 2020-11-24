@@ -340,8 +340,11 @@ abstract class EntitySupport<T> {
 
   Map<String, dynamic> serialize(T entity);
 
-  DateTime deserializeDateTime(String input) =>
-      input != null ? DateTime.parse(input) : null;
+  DateTime deserializeDateTime(dynamic input) => input != null
+      ? input is DateTime
+          ? input
+          : DateTime.parse(input)
+      : null;
 
   E deserializeEntity<E>(Map<String, dynamic> map) =>
       map != null ? registry.lookup<E>().deserialize(map) : null;
