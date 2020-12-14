@@ -1,5 +1,7 @@
 library box.memory;
 
+import 'dart:math';
+
 import 'package:box/box.dart';
 
 class MemoryBox extends Box {
@@ -11,10 +13,10 @@ class MemoryBox extends Box {
   bool get persistent => false;
 
   @override
-  Future store(Object entity) {
-    return entitiesFor(entity.runtimeType).then((entities) {
-      entities[keyOf(entity)] = entity;
-    });
+  Future<K> store<K>(Object entity) async {
+    var entities = await entitiesFor(entity.runtimeType);
+    entities[keyOf(entity)] = entity;
+    return keyOf(entity) as K;
   }
 
   @override

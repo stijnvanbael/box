@@ -58,14 +58,15 @@ class FirestoreBox extends Box {
   }
 
   @override
-  Future store(dynamic entity) async {
+  Future<K> store<K>(dynamic entity) async {
     var connection = await _connect();
     var entitySupport = registry.lookup(entity.runtimeType);
     var documentType = entitySupport.name;
     var key = entitySupport.getKey(entity);
     _verifyNoCompositeKey(key);
     var document = entitySupport.serialize(entity);
-    return connection.patch(documentType, key, document);
+    await connection.patch(documentType, key, document);
+    return key as K;
   }
 
   Future<_Connection> _connect() async {

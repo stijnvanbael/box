@@ -16,9 +16,10 @@ class FileBox extends MemoryBox {
   FileBox(this._path, Registry registry) : super(registry);
 
   @override
-  Future store(Object entity) {
-    super.store(entity);
-    return Future(() => _persist(entity.runtimeType));
+  Future<K> store<K>(Object entity) async {
+    var key = await super.store(entity);
+    await _persist(entity.runtimeType);
+    return key;
   }
 
   Future _persist(Type type) async {
@@ -35,7 +36,7 @@ class FileBox extends MemoryBox {
     }
     await file.create(recursive: true);
     var json = await Stream.fromIterable(entities.values)
-    .map((entity) => entitySupport.serialize(entity))
+        .map((entity) => entitySupport.serialize(entity))
         .map((value) => jsonEncode(value))
         .join('\n');
     await file.writeAsString(json.toString(), mode: FileMode.append);

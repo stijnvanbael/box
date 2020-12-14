@@ -152,7 +152,7 @@ class PostgresBox extends Box {
       _QueryStep<T>(this, type, []);
 
   @override
-  Future store(dynamic entity) async {
+  Future<K> store<K>(dynamic entity) async {
     var connection = await _openConnection;
     var entitySupport = registry.lookup(entity.runtimeType);
     var tableName = _snakeCase(entitySupport.name);
@@ -161,8 +161,8 @@ class PostgresBox extends Box {
     var statement =
         'INSERT INTO "$tableName"(${fieldNames.map((field) => '"$field"').join(', ')}) '
         'VALUES(${entitySupport.fields.map((field) => _fieldExpression(field, entitySupport.getFieldValue(field, entity))).join(', ')})';
-
-    return connection.execute(statement, substitutionValues: fieldValues);
+    await connection.execute(statement, substitutionValues: fieldValues);
+    return keyOf(entity);
   }
 
   String _fieldExpression(String field, dynamic value) {

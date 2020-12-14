@@ -12,13 +12,15 @@ abstract class Box {
   bool get persistent => true;
 
   /// Stores an entity in this Box. The entity is persisted if this Box implementation is persistent.
-  Future store(dynamic entity);
+  Future<K> store<K>(dynamic entity);
 
   /// Stores all specified entities in this Box.
-  Future storeAll(Iterable<dynamic> entities) async {
+  Future<List<K>> storeAll<K>(Iterable<dynamic> entities) async {
+    var keys = <K>[];
     for (var entity in entities) {
-      await store(entity);
+      keys.add(await store(entity));
     }
+    return keys;
   }
 
   /// Inserts all specified entities of the same type in this Box.

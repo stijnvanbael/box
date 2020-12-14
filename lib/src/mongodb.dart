@@ -35,12 +35,13 @@ class MongoDbBox extends Box {
       _QueryStep<T>(this, type, null);
 
   @override
-  Future store(dynamic entity) => _autoRecover(()async {
+  Future<K> store<K>(dynamic entity) => _autoRecover(()async {
     var entitySupport = registry.lookup(entity.runtimeType);
     var document =
         _wrapKey(entitySupport.serialize(entity), entitySupport.keyFields);
     var collection = await _collectionFor(entity.runtimeType);
     await collection.save(document);
+    return document['_id'].toHexString() as K;
   });
 
   @override

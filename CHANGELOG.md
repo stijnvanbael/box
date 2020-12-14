@@ -1,3 +1,7 @@
+0.3.1+1 Return generated ID
+---------------------------
+* [ ] Return generated ID
+
 0.3.1 Delete
 ------------
 * [x] DELETE FROM
