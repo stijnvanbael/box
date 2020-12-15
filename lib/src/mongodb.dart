@@ -35,14 +35,15 @@ class MongoDbBox extends Box {
       _QueryStep<T>(this, type, null);
 
   @override
-  Future<K> store<K>(dynamic entity) => _autoRecover(()async {
-    var entitySupport = registry.lookup(entity.runtimeType);
-    var document =
-        _wrapKey(entitySupport.serialize(entity), entitySupport.keyFields);
-    var collection = await _collectionFor(entity.runtimeType);
-    await collection.save(document);
-    return document['_id'].toHexString() as K;
-  });
+  Future<K> store<K>(dynamic entity) => _autoRecover(() async {
+        var entitySupport = registry.lookup(entity.runtimeType);
+        var document =
+            _wrapKey(entitySupport.serialize(entity), entitySupport.keyFields);
+        var collection = await _collectionFor(entity.runtimeType);
+        await collection.save(document);
+        var id = document['_id'];
+        return id is String ? id : id.toHexString() as K;
+      });
 
   @override
   Future insertAll<T>(Iterable<T> entities) => _autoRecover(() async {
@@ -113,7 +114,15 @@ class MongoDbBox extends Box {
     }
     var wrapped = Map<String, dynamic>.from(document);
     if (keyFields.length == 1) {
-      wrapped['_id'] = document[keyFields.first];
+      var key = document[keyFields.first];
+      if (key.length == 24) {
+        try {
+          key = ObjectId.fromHexString(key);
+        } catch (e) {
+          // Not a hex string
+        }
+      }
+      wrapped['_id'] = key;
     } else {
       wrapped['_id'] = {for (var key in keyFields) key: document[key]};
     }
