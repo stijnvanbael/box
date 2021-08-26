@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 
 import 'box.dart';
 
-void deleteTests(String name, Box Function() boxBuilder) async {
+Future deleteTests(String name, Box Function() boxBuilder) async {
   Future<Box> reconnectIfPersistent(Box box) async {
     if (box != firestore && box.persistent) {
       await box.close();

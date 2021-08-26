@@ -1,7 +1,7 @@
 PatternMatcher<I, O> matcher<I, O>() => PatternMatcher([]);
 
 TransformingPredicate<I, T> predicate<I, T>(bool Function(I input) predicate,
-    [T Function(I input) transformer, String description]) {
+    [T Function(I input)? transformer, String? description]) {
   transformer = transformer ?? identity;
   return TransformingPredicate<I, T>(predicate, transformer, description);
 }
@@ -13,20 +13,25 @@ class PatternMatcher<I, O> implements Function {
 
   PatternMatcher(this._cases);
 
-  PatternMatcher<I, O> whenIs<T>(O Function(T input) function) => when(typeIs<T>(), function);
+  PatternMatcher<I, O> whenIs<T>(O Function(T input) function) =>
+      when(typeIs<T>() as TransformingPredicate<I, T>, function);
 
-  PatternMatcher<I, O> whenEquals<T>(T value, O Function(T input) function) => when(equals(value), function);
+  PatternMatcher<I, O> whenEquals<T>(T value, O Function(T input) function) =>
+      when(equals(value), function);
 
-  PatternMatcher<I, O> whenNull(O Function(I input) function) => when(isNull(), function);
+  PatternMatcher<I, O> whenNull(O Function(I input) function) =>
+      when(isNull(), function);
 
-  PatternMatcher<I, O> when<T>(TransformingPredicate<I, T> predicate, O Function(T input) function) {
+  PatternMatcher<I, O> when<T>(
+      TransformingPredicate<I, T> predicate, O Function(T input) function) {
     var newCases = List<_Case<dynamic, dynamic, dynamic>>.from(_cases);
     newCases.add(_Case(predicate, function));
     return PatternMatcher(newCases);
   }
 
   PatternMatcher<I, O> when2<T1, T2>(
-      TransformingPredicate<I, Pair<T1, T2>> predicate, O Function(T1 input1, T2 input2) function) {
+      TransformingPredicate<I, Pair<T1, T2>> predicate,
+      O Function(T1 input1, T2 input2) function) {
     var newCases = List<_Case<dynamic, dynamic, dynamic>>.from(_cases);
     newCases.add(_Case(predicate, (p) => function(p.a, p.b)));
     return PatternMatcher(newCases);
@@ -35,9 +40,9 @@ class PatternMatcher<I, O> implements Function {
   PatternMatcher<I, O> otherwise(O Function(I input) function) =>
       when<I>(predicate((i) => true, identity, 'Otherwise'), function);
 
-  O apply(I input) => call(input);
+  O? apply(I input) => call(input);
 
-  O call(I input) {
+  O? call(I input) {
     for (var c in _cases) {
       if (c.matches(input)) {
         return c(input);
@@ -75,9 +80,11 @@ class Pair<A, B> {
 class TransformingPredicate<I, T> {
   final Function _predicate;
   final Function _transformer;
-  final String _description;
+  final String? _description;
 
-  TransformingPredicate(bool Function(I input) predicate, T Function(I input) transformer, [String description])
+  TransformingPredicate(
+      bool Function(I input) predicate, T Function(I input) transformer,
+      [String? description])
       : _predicate = predicate,
         _transformer = transformer,
         _description = description;
@@ -94,12 +101,15 @@ class TransformingPredicate<I, T> {
   }
 }
 
-TransformingPredicate<dynamic, T> typeIs<T>() =>
-    TransformingPredicate<dynamic, T>((i) => i is T, identity);
+TransformingPredicate<Object, T> typeIs<T>() =>
+    TransformingPredicate<Object, T>((i) => i is T, identity);
 
-TransformingPredicate<I, T> any<I, T>(List<TransformingPredicate<I, T>> predicates) =>
-    TransformingPredicate<I, T>((i) => predicates.any((p) => p.test(i)), identity);
+TransformingPredicate<I, T> any<I, T>(
+        List<TransformingPredicate<I, T>> predicates) =>
+    TransformingPredicate<I, T>(
+        (i) => predicates.any((p) => p.test(i)), identity);
 
-TransformingPredicate<I, T> equals<I, T>(T value) => TransformingPredicate<I, T>((i) => i == value, identity);
+TransformingPredicate<I, T> equals<I, T>(T? value) =>
+    TransformingPredicate<I, T>((i) => i == value, identity);
 
 TransformingPredicate<I, I> isNull<I>() => equals(null);

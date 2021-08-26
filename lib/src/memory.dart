@@ -1,7 +1,5 @@
 library box.memory;
 
-import 'dart:math';
-
 import 'package:box/box.dart';
 
 class MemoryBox extends Box {
@@ -13,22 +11,21 @@ class MemoryBox extends Box {
   bool get persistent => false;
 
   @override
-  Future<K> store<K>(Object entity) async {
+  Future<K> store<K>(dynamic entity) async {
     var entities = await entitiesFor(entity.runtimeType);
     entities[keyOf(entity)] = entity;
     return keyOf(entity) as K;
   }
 
   @override
-  Future<T> find<T>(key, [Type type]) async {
+  Future<T?> find<T>(dynamic key, [Type? type]) async {
     return entitiesFor(type ?? T).then((entitiesForType) {
-      return entitiesForType != null
-          ? entitiesForType[key is Map ? Composite(key) : key]
-          : null;
+      return entitiesForType[
+          key is Map ? Composite(key as Map<String, dynamic>) : key];
     });
   }
 
-  Stream<T> _query<T>(Type type, Predicate predicate, _Ordering ordering) {
+  Stream<T> _query<T>(Type type, Predicate? predicate, _Ordering? ordering) {
     return Stream.fromFuture(entitiesFor(type).then((entities) {
       var list = List<T>.from(entities.values.where(
           (item) => predicate != null ? predicate.evaluate(item) : true));
@@ -43,7 +40,7 @@ class MemoryBox extends Box {
   SelectStep select(List<Field> fields) => _SelectStep(this, fields);
 
   @override
-  _QueryStep<T> selectFrom<T>([Type type, String alias]) =>
+  _QueryStep<T> selectFrom<T>([Type? type, String? alias]) =>
       _QueryStep<T>(this, type);
 
   Future<Map> entitiesFor(Type type) {
@@ -53,14 +50,14 @@ class MemoryBox extends Box {
   }
 
   @override
-  Future deleteAll<T>([Type type]) async =>
-      (await entitiesFor(T ?? type)).clear();
+  Future deleteAll<T>([Type? type]) async =>
+      (await entitiesFor(type ?? T)).clear();
 
   @override
   Future close() async {}
 
   @override
-  DeleteStep<T> deleteFrom<T>([Type type]) => _DeleteStep<T>(this, type ?? T);
+  DeleteStep<T> deleteFrom<T>([Type? type]) => _DeleteStep<T>(this, type ?? T);
 }
 
 class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
@@ -70,7 +67,7 @@ class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
   @override
   final Type type;
   @override
-  final Predicate<T> predicate;
+  final Predicate<T>? predicate;
 
   _DeleteStep(this.box, this.type) : predicate = null;
 
@@ -85,7 +82,7 @@ class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
 
   @override
   Future execute() async => (await box.entitiesFor(type))
-      .removeWhere((key, value) => predicate.evaluate(value));
+      .removeWhere((key, value) => predicate!.evaluate(value));
 
   @override
   WhereStep<T, DeleteStep<T>> where(String field) =>
@@ -93,7 +90,7 @@ class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
 }
 
 class _DeleteWhereStep<T> extends _WhereStep<T, _DeleteStep<T>> {
-  _DeleteWhereStep(String field, DeleteStep<T> delete) : super(field, delete);
+  _DeleteWhereStep(String field, _DeleteStep<T> delete) : super(field, delete);
 
   @override
   _DeleteStep<T> createNextStep(Predicate<T> predicate) =>
@@ -101,13 +98,14 @@ class _DeleteWhereStep<T> extends _WhereStep<T, _DeleteStep<T>> {
 }
 
 class _SelectStep implements SelectStep {
-  final Box _box;
+  final MemoryBox _box;
   final List<Field> _fields;
 
   _SelectStep(this._box, this._fields);
 
   @override
-  _QueryStep from(Type type, [String alias]) => _QueryStep(_box, type, _fields);
+  _QueryStep from(Type type, [String? alias]) =>
+      _QueryStep(_box, type, _fields);
 }
 
 abstract class _TypedStep<T, S extends _TypedStep<T, S>> {
@@ -115,11 +113,11 @@ abstract class _TypedStep<T, S extends _TypedStep<T, S>> {
 
   MemoryBox get box;
 
-  Predicate<T> get predicate;
+  Predicate<T>? get predicate;
 
-  WhereStep<T, S> and(String field) => _AndStep(field, this);
+  WhereStep<T, S> and(String field) => _AndStep(field, this as S);
 
-  WhereStep<T, S> or(String field) => _OrStep(field, this);
+  WhereStep<T, S> or(String field) => _OrStep(field, this as S);
 
   S addPredicate(Predicate<T> predicate);
 }
@@ -127,7 +125,7 @@ abstract class _TypedStep<T, S extends _TypedStep<T, S>> {
 class _QueryStep<T> extends _ExpectationStep<T>
     with _TypedStep<T, _QueryStep<T>>
     implements QueryStep<T> {
-  _QueryStep(Box box, [Type type, List<Field> selectFields])
+  _QueryStep(MemoryBox box, [Type? type, List<Field>? selectFields])
       : super(box, type ?? T, selectFields);
 
   _QueryStep.withPredicate(_QueryStep<T> query, Predicate<T> predicate)
@@ -141,7 +139,7 @@ class _QueryStep<T> extends _ExpectationStep<T>
   OrderByStep<T> orderBy(String field) => _OrderByStep(field, this);
 
   @override
-  JoinStep<T> innerJoin(Type type, [String alias]) {
+  JoinStep<T> innerJoin(Type type, [String? alias]) {
     // TODO: implement innerJoin
     throw UnimplementedError();
   }
@@ -156,7 +154,7 @@ class _OrStep<T, S extends _TypedStep<T, S>> extends _WhereStep<T, S> {
 
   @override
   Predicate<T> combine(Predicate<T> predicate) =>
-      step.predicate != null ? step.predicate.or(predicate) : predicate;
+      step.predicate != null ? step.predicate!.or(predicate) : predicate;
 }
 
 class _AndStep<T, S extends _TypedStep<T, S>> extends _WhereStep<T, S> {
@@ -164,16 +162,16 @@ class _AndStep<T, S extends _TypedStep<T, S>> extends _WhereStep<T, S> {
 
   @override
   Predicate<T> combine(Predicate<T> predicate) =>
-      step.predicate != null ? step.predicate.and(predicate) : predicate;
+      step.predicate != null ? step.predicate!.and(predicate) : predicate;
 }
 
 class _ExpectationStep<T> extends ExpectationStep<T> {
   @override
   final MemoryBox box;
-  final Predicate<T> predicate;
-  final _Ordering<T> ordering;
-  final Type _type;
-  final List<Field> selectFields;
+  final Predicate<T>? predicate;
+  final _Ordering<T>? ordering;
+  final Type? _type;
+  final List<Field>? selectFields;
 
   _ExpectationStep(this.box,
       [this._type, this.selectFields, this.predicate, this.ordering]);
@@ -181,7 +179,7 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
   @override
   Stream<T> stream({int limit = 1000000, int offset = 0}) {
     return box
-        ._query(_type, predicate, ordering)
+        ._query(type, predicate, ordering)
         .skip(offset)
         .take(limit)
         .map(_selectFields);
@@ -192,14 +190,14 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
     return stream().first;
   }
 
-  Type get type => T == dynamic ? _type : T;
+  Type get type => _type ?? T;
 
   T _selectFields(dynamic record) {
     if (selectFields == null) {
       return record;
     }
     return {
-      for (var field in selectFields)
+      for (var field in selectFields!)
         field.alias: box.registry.getFieldValue(field.name, record)
     } as T;
   }
@@ -246,7 +244,7 @@ class _WhereStep<T, S extends _TypedStep<T, S>> implements WhereStep<T, S> {
 
   @override
   S in_(Iterable<dynamic> values) =>
-      createNextStep(_InPredicate(field, values, step.box.registry));
+      createNextStep(_InPredicate(field, values.toList(), step.box.registry));
 
   @override
   S contains(dynamic value) =>

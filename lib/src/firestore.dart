@@ -3,15 +3,15 @@ library box.firestore;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:googleapis_auth/auth.dart';
 import 'package:googleapis_auth/auth_io.dart';
+import 'package:googleapis_auth/googleapis_auth.dart';
 
 import '../core.dart';
 
 class FirestoreBox extends Box {
   final String accountKeyFile;
   final String version;
-  _Connection _connection;
+  _Connection? _connection;
 
   FirestoreBox(this.accountKeyFile, Registry registry, {this.version = 'v1'})
       : super(registry);
@@ -20,7 +20,7 @@ class FirestoreBox extends Box {
   Future close() async => _connection?.close();
 
   @override
-  Future deleteAll<T>([Type type]) async {
+  Future deleteAll<T>([Type? type]) async {
     var connection = await _connect();
     var documentType = registry.lookup(type ?? T).name;
     try {
@@ -34,13 +34,13 @@ class FirestoreBox extends Box {
   }
 
   @override
-  Future<T> find<T>(dynamic key, [Type type]) async {
+  Future<T> find<T>(dynamic key, [Type? type]) async {
     _verifyNoCompositeKey(key);
     var connection = await _connect();
     var entitySupport = registry.lookup(type ?? T);
     var documentType = entitySupport.name;
     var document = await connection.get(documentType, key);
-    return entitySupport.deserialize(document);
+    return document != null ? entitySupport.deserialize(document) : null;
   }
 
   void _verifyNoCompositeKey(key) {
@@ -53,7 +53,7 @@ class FirestoreBox extends Box {
   SelectStep select(List<Field> fields) => _SelectStep(this, fields);
 
   @override
-  QueryStep<T> selectFrom<T>([Type type, String alias]) {
+  QueryStep<T> selectFrom<T>([Type? type, String? alias]) {
     return _QueryStep(this, type ?? T, []);
   }
 
@@ -78,7 +78,7 @@ class FirestoreBox extends Box {
           credentials, ['https://www.googleapis.com/auth/datastore']);
       _connection = _Connection(client, keys['project_id'], version);
     }
-    return _connection;
+    return _connection!;
   }
 
   @override
@@ -97,20 +97,21 @@ class FirestoreBox extends Box {
   bool get supportsIn => false;
 
   @override
-  DeleteStep<T> deleteFrom<T>([Type type]) {
+  DeleteStep<T> deleteFrom<T>([Type? type]) {
     // TODO: implement deleteFrom
     throw UnimplementedError();
   }
 }
 
 class _SelectStep implements SelectStep {
-  final Box _box;
+  final FirestoreBox _box;
   final List<Field> _fields;
 
   _SelectStep(this._box, this._fields);
 
   @override
-  _QueryStep from(Type type, [String alias]) => _QueryStep(_box, type, _fields);
+  _QueryStep from(Type type, [String? alias]) =>
+      _QueryStep(_box, type, _fields);
 }
 
 class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
@@ -135,7 +136,7 @@ class _QueryStep<T> extends _ExpectationStep<T> implements QueryStep<T> {
       _QueryWhereStep(field, this);
 
   @override
-  JoinStep<T> innerJoin(Type type, [String alias]) {
+  JoinStep<T> innerJoin(Type type, [String? alias]) {
     // TODO: implement innerJoin
     throw UnimplementedError();
   }
@@ -257,8 +258,8 @@ class _OrderByStep<T> implements OrderByStep<T> {
 class _ExpectationStep<T> extends ExpectationStep<T> {
   @override
   final FirestoreBox box;
-  final Map<String, dynamic> _filter;
-  final List<Map<String, dynamic>> _order;
+  final Map<String, dynamic>? _filter;
+  final List<Map<String, dynamic>>? _order;
   final Type _type;
   final List<Field> _selectFields;
 
@@ -266,27 +267,17 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
       this.box, this._filter, this._order, this._type, this._selectFields);
 
   @override
-  Stream<T> stream({int limit, int offset}) async* {
+  Stream<T> stream({int limit = 1000000, int offset = 0}) async* {
     var entitySupport = box.registry.lookup(_type);
     var connection = await box._connect();
     var documents = (await connection.query(
         _selectFields, entitySupport.name, _filter, _order, limit, offset));
     for (var document in documents) {
       if (_selectFields.isEmpty) {
-        yield entitySupport.deserialize(document);
+        yield entitySupport.deserialize(document) as T;
       } else {
         yield _applyFieldAliases(document) as T;
       }
-    }
-  }
-
-  @override
-  Future<T> unique() async {
-    var results = stream(limit: 1);
-    try {
-      return results.first;
-    } catch (e) {
-      return null;
     }
   }
 
@@ -313,7 +304,8 @@ class _Connection {
   _Connection(this._client, this._projectId, this._version);
 
   Future<List<_Document>> list(String documentType) async {
-    var response = await _client.get('$_urlPrefix/documents/$documentType');
+    var response =
+        await _client.get(Uri.parse('$_urlPrefix/documents/$documentType'));
     if (response.statusCode >= 400) {
       throw 'Error deleting $documentType $key: ${response.statusCode}\n${response.body}';
     }
@@ -323,8 +315,8 @@ class _Connection {
   }
 
   Future delete(String documentType, String key) async {
-    var response =
-        await _client.delete('$_urlPrefix/documents/$documentType/$key');
+    var response = await _client
+        .delete(Uri.parse('$_urlPrefix/documents/$documentType/$key'));
     if (response.statusCode >= 400) {
       throw 'Error deleting $documentType $key: ${response.statusCode}\n${response.body}';
     }
@@ -333,7 +325,7 @@ class _Connection {
   Future patch(
       String documentType, String key, Map<String, dynamic> document) async {
     var response = await _client.patch(
-        '$_urlPrefix/documents/$documentType/$key',
+        Uri.parse('$_urlPrefix/documents/$documentType/$key'),
         body: jsonEncode(_wrap(document)['mapValue']));
     if (response.statusCode >= 400) {
       throw 'Error patching $documentType $key: ${response.statusCode}\n${response.body}';
@@ -345,9 +337,9 @@ class _Connection {
 
   void close() => _client.close();
 
-  Future<Map<String, dynamic>> get(String documentType, String key) async {
-    var response =
-        await _client.get('$_urlPrefix/documents/$documentType/$key');
+  Future<Map<String, dynamic>?> get(String documentType, String key) async {
+    var response = await _client
+        .get(Uri.parse('$_urlPrefix/documents/$documentType/$key'));
     if (response.statusCode == 404) {
       return null;
     }
@@ -360,8 +352,8 @@ class _Connection {
   Future<List<Map<String, dynamic>>> query(
       List<Field> selectFields,
       String documentType,
-      Map<String, dynamic> filter,
-      List<Map<String, dynamic>> order,
+      Map<String, dynamic>? filter,
+      List<Map<String, dynamic>>? order,
       int limit,
       int offset) async {
     var query = {
@@ -379,8 +371,10 @@ class _Connection {
             selectFields.map((field) => {'fieldPath': field.name}).toList()
       };
     }
-    var response = await _client.post('$_urlPrefix/documents:runQuery',
-        body: jsonEncode({'structuredQuery': query}));
+    var response = await _client.post(
+      Uri.parse('$_urlPrefix/documents:runQuery'),
+      body: jsonEncode({'structuredQuery': query}),
+    );
     if (response.statusCode >= 400) {
       throw 'Error querying $documentType $key: ${response.statusCode}\n${response.body}';
     }
@@ -436,7 +430,11 @@ class _Document {
   final DateTime createTime;
   final DateTime updateTime;
 
-  _Document({this.name, this.createTime, this.updateTime});
+  _Document({
+    required this.name,
+    required this.createTime,
+    required this.updateTime,
+  });
 
   _Document.fromJson(Map map)
       : this(

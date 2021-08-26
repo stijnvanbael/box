@@ -16,7 +16,7 @@ class FileBox extends MemoryBox {
   FileBox(this._path, Registry registry) : super(registry);
 
   @override
-  Future<K> store<K>(Object entity) async {
+  Future<K> store<K>(dynamic entity) async {
     var key = await super.store(entity);
     await _persist(entity.runtimeType);
     return key;
@@ -51,10 +51,10 @@ class FileBox extends MemoryBox {
   Future<Map> entitiesFor(Type type) {
     var typeName = registry.lookup(type).name;
     entities.putIfAbsent(typeName, () => {});
-    if (entities[typeName].isEmpty) {
+    if (entities[typeName]!.isEmpty) {
       return _load(type).toList().then((values) {
         entities[typeName] = {for (var value in values) keyOf(value): value};
-        return entities[typeName];
+        return entities[typeName]!;
       });
     }
     return Future.value(entities[typeName]);
@@ -82,7 +82,7 @@ class FileBox extends MemoryBox {
   }
 
   @override
-  Future<T> find<T>(key, [Type type]) {
+  Future<T?> find<T>(key, [Type? type]) {
     var typeName = registry.lookup(type ?? T).name;
     if (entities.isEmpty) {
       return _load(type ?? T).toList().then((values) {
@@ -94,7 +94,7 @@ class FileBox extends MemoryBox {
   }
 
   @override
-  Future deleteAll<T>([Type type]) async {
+  Future deleteAll<T>([Type? type]) async {
     await super.deleteAll<T>(type);
     var file = _fileOf(registry.lookup(type ?? T).name);
     if (file.existsSync()) {

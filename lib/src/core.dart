@@ -32,7 +32,7 @@ abstract class Box {
       registry.lookup(entity.runtimeType).getKey(entity);
 
   /// Finds an entity of the specified type by primary key.
-  Future<T> find<T>(dynamic key, [Type type]);
+  Future<T?> find<T>(dynamic key, [Type type]);
 
   /// Starts a new query selecting all fields from the specified type. SQL: SELECT * FROM <type>
   QueryStep<T> selectFrom<T>([Type type, String alias]);
@@ -150,17 +150,17 @@ abstract class OrderByStep<T> {
 }
 
 /// A mapping function that maps records to the specified type.
-typedef Mapper<T> = T Function(dynamic input);
+typedef Mapper<T> = T? Function(dynamic input);
 
 abstract class ExpectationStep<T> {
   /// Maps resulting records using the specified mapping function.
-  ExpectationStep<M> mapTo<M>([Mapper<M> mapper]) =>
+  ExpectationStep<M> mapTo<M>([Mapper<M>? mapper]) =>
       _MappingStep(this, mapper ?? _typeMapper<M>());
 
   /// Returns a stream of results, optionally limited by:
   ///   offset: starts returning results from the specified offset and skips all records before. SQL: OFFSET <number>
   ///   limit: limits the number of results returned. SQL: LIMIT <number>
-  Stream<T> stream({int limit, int offset});
+  Stream<T> stream({int limit = 1000000, int offset = 0});
 
   /// Returns a list of results, optionally limited by:
   ///   offset: starts returning results from the specified offset and skips all records before. SQL: OFFSET <number>
@@ -169,9 +169,9 @@ abstract class ExpectationStep<T> {
       stream(limit: limit, offset: offset).toList();
 
   /// Returns a single result.
-  Future<T> unique() => stream(limit: 1, offset: 0).first;
+  Future<T?> unique() => stream(limit: 1, offset: 0).firstOrNull;
 
-  Mapper<M> _typeMapper<M>() =>
+  Mapper<M?> _typeMapper<M>() =>
       (map) => box.registry.lookup<M>().deserialize(map);
 
   Box get box;
@@ -184,15 +184,15 @@ class _MappingStep<T> extends ExpectationStep<T> {
   _MappingStep(this._wrapped, this._mapper);
 
   @override
-  ExpectationStep<M> mapTo<M>([M Function(T p1) mapper]) =>
-      _MappingStep(this, mapper);
+  ExpectationStep<M> mapTo<M>([Mapper<M>? mapper]) =>
+      _MappingStep(this, mapper ?? (v) => v);
 
   @override
-  Stream<T> stream({int limit, int offset}) =>
-      _wrapped.stream(limit: limit, offset: offset).map(_mapper);
+  Stream<T> stream({int limit = 1000000, int offset = 0}) =>
+      _wrapped.stream(limit: limit, offset: offset).map(_mapper).whereNotNull();
 
   @override
-  Future<T> unique() => stream().first;
+  Future<T?> unique() => stream().firstOrNull;
 
   @override
   Box get box => _wrapped.box;
@@ -277,7 +277,7 @@ const index = Index();
 class Index {
   final List<IndexField> fields;
 
-  const Index([this.fields]);
+  const Index([this.fields = const []]);
 }
 
 class IndexField {
@@ -303,7 +303,7 @@ class Field {
   }
 }
 
-Field $(String name, {String alias}) => Field(name, alias ?? name);
+Field $(String name, {String? alias}) => Field(name, alias ?? name);
 
 typedef FieldAccessor<T> = dynamic Function(T entity);
 
@@ -313,15 +313,17 @@ abstract class EntitySupport<T> {
   final Map<String, FieldAccessor<T>> fieldAccessors;
   final Map<String, Type> fieldTypes;
   final List<String> keyFields;
+  final List<Index> indexes;
   final String name;
-  Registry registry;
+  Registry? registry;
 
   EntitySupport({
-    this.name,
-    this.keyAccessor,
-    this.fieldAccessors,
-    this.keyFields,
-    this.fieldTypes,
+    required this.name,
+    required this.keyAccessor,
+    required this.fieldAccessors,
+    required this.keyFields,
+    required this.fieldTypes,
+    this.indexes = const [],
   });
 
   dynamic getKey(T entity) => keyAccessor(entity);
@@ -338,26 +340,26 @@ abstract class EntitySupport<T> {
 
   List<String> get fields => fieldAccessors.keys.toList();
 
-  T deserialize(Map<String, dynamic> map);
+  T? deserialize(Map<String, dynamic>? map);
 
   Map<String, dynamic> serialize(T entity);
 
-  DateTime deserializeDateTime(dynamic input) => input != null
+  DateTime? deserializeDateTime(dynamic input) => input != null
       ? input is DateTime
           ? input
           : DateTime.parse(input)
       : null;
 
-  E deserializeEntity<E>(Map<String, dynamic> map) =>
-      map != null ? registry.lookup<E>().deserialize(map) : null;
+  E? deserializeEntity<E>(Map<String, dynamic>? map) =>
+      map != null ? registry!.lookup<E>().deserialize(map) : null;
 
-  Map<String, dynamic> serializeEntity<E>(E entity) =>
-      entity != null ? registry.lookup<E>().serialize(entity) : null;
+  Map<String, dynamic>? serializeEntity<E>(E? entity) =>
+      entity != null ? registry!.lookup<E>().serialize(entity) : null;
 
-  String serializeEnum(dynamic value) =>
-      value?.toString()?.substring(value.toString().indexOf('.') + 1);
+  String? serializeEnum(dynamic value) =>
+      value?.toString().substring(value.toString().indexOf('.') + 1);
 
-  E deserializeEnum<E>(String value, List<E> values) {
+  E? deserializeEnum<E>(String? value, List<E> values) {
     if (value == null) {
       return null;
     }
@@ -373,18 +375,18 @@ abstract class EntitySupport<T> {
 /// Holds entity information fox Box implementations.
 /// Every Box implementation requires a registry.
 class Registry {
-  final Map<Type, EntitySupport> _entries = {};
+  final Map<Type, EntitySupport> entries = {};
 
   /// Register the generated EntitySupport for entity to use with Box.
   EntitySupport<T> register<T>(EntitySupport<T> support) {
-    _entries[T] = support;
+    entries[T] = support;
     support.registry = this;
     return support;
   }
 
   /// Lookup the EntitySupport for a type.
-  EntitySupport<T> lookup<T>([Type type]) {
-    var support = _entries[type ?? T];
+  EntitySupport<T> lookup<T>([Type? type]) {
+    var support = entries[type ?? T];
     if (support == null) {
       throw 'No registry entry found for ${type ?? T}. To fix this:\n'
           ' 1. Make sure the class is annotated with @entity\n'
@@ -392,7 +394,7 @@ class Registry {
           ' 3. Run "pub run build_runner build" again'
           ' 4. Add the generated Box support to the registry: Registry()..register(${type ?? T}\$BoxSupport())';
     }
-    return support;
+    return support as EntitySupport<T>;
   }
 
   /// Returns the value of the field with the specified fieldName from the specified entity.
@@ -407,4 +409,19 @@ class Registry {
     }
     return currentValue;
   }
+}
+
+extension FirstOrNull<E> on Stream<E> {
+  Future<E?> get firstOrNull async {
+    try {
+      return await first;
+    } on StateError {
+      return null;
+    }
+  }
+}
+
+extension WhereNotNull<E> on Stream<E?> {
+  Stream<E> whereNotNull() =>
+      where((element) => element != null).map((element) => element as E);
 }

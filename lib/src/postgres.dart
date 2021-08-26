@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:meta/meta.dart';
 import 'package:postgres/postgres.dart';
 import 'package:recase/recase.dart';
 
@@ -18,13 +17,15 @@ class PostgresBox extends Box {
   final PostgreSQLConnection _connection;
   final ObjectRepresentation objectRepresentation;
 
-  PostgresBox(String hostname, Registry registry,
-      {@required String database,
-      int port = 5432,
-      String username = 'postgres',
-      String password = 'postgres',
-      this.objectRepresentation = ObjectRepresentation.json})
-      : _connection = PostgreSQLConnection(
+  PostgresBox(
+    String hostname,
+    Registry registry, {
+    required String database,
+    int port = 5432,
+    String username = 'postgres',
+    String password = 'postgres',
+    this.objectRepresentation = ObjectRepresentation.json,
+  })  : _connection = PostgreSQLConnection(
           hostname,
           port,
           database,
@@ -37,7 +38,7 @@ class PostgresBox extends Box {
   Future close() => _connection.close();
 
   @override
-  Future deleteAll<T>([Type type]) async {
+  Future deleteAll<T>([Type? type]) async {
     var connection = await _openConnection;
     var entitySupport = registry.lookup(type ?? T);
     var tableName = _snakeCase(entitySupport.name);
@@ -45,19 +46,20 @@ class PostgresBox extends Box {
   }
 
   @override
-  Future<T> find<T>(key, [Type type]) async {
+  Future<T?> find<T>(key, [Type? type]) async {
     var connection = await _openConnection;
     var entitySupport = registry.lookup(type ?? T);
     var tableName = _snakeCase(entitySupport.name);
     var conditions = entitySupport.keyFields
         .map((field) => '${_snakeCase(field)} = @$field')
         .join(' AND ');
-    var values = key is Map ? key : {entitySupport.keyFields.first: key};
+    var values = (key is Map ? key : {entitySupport.keyFields.first: key})
+        as Map<String, dynamic>;
     var results = await connection.mappedResultsQuery(
         'SELECT * FROM "$tableName" WHERE $conditions',
         substitutionValues: values);
     if (results.isNotEmpty) {
-      return _mapRow<T>(results.first[tableName], entitySupport, type, [], []);
+      return _mapRow<T>(results.first[tableName]!, entitySupport, type, [], []);
     }
     return null;
   }
@@ -66,7 +68,7 @@ class PostgresBox extends Box {
     String conditions,
     Map<String, dynamic> bindings,
     Map<String, String> order,
-    Type type,
+    Type? type,
     int limit,
     int offset,
     List<Field> selectFields,
@@ -97,8 +99,13 @@ class PostgresBox extends Box {
     }
   }
 
-  T _mapRow<T>(Map<String, dynamic> row, EntitySupport entitySupport, Type type,
-      List<Field> selectFields, Iterable<_Table> joinTables) {
+  T _mapRow<T>(
+    Map<String, dynamic>? row,
+    EntitySupport entitySupport,
+    Type? type,
+    List<Field> selectFields,
+    Iterable<_Table> joinTables,
+  ) {
     if (joinTables.isEmpty) {
       var converted = _convertResult<T>(row, type);
       if (selectFields.isEmpty) {
@@ -125,7 +132,7 @@ class PostgresBox extends Box {
     };
   }
 
-  dynamic _convertResult<T>(dynamic value, [Type type]) {
+  dynamic _convertResult<T>(dynamic value, [Type? type]) {
     if (value is Map) {
       return value.map((key, value) => MapEntry(
           _camelCase(key), _deserialize<T>(_camelCase(key), value, type)));
@@ -134,11 +141,11 @@ class PostgresBox extends Box {
     }
   }
 
-  dynamic _deserialize<T>(String name, dynamic value, [Type type]) {
+  dynamic _deserialize<T>(String name, dynamic value, [Type? type]) {
     if (objectRepresentation == ObjectRepresentation.json && value is String) {
       var entitySupport = registry.lookup<T>(type);
-      if (entitySupport != null && entitySupport.fieldTypes[name] != String) {
-        return _fromJson(jsonDecode(value), entitySupport.fieldTypes[name]);
+      if (entitySupport.fieldTypes[name] != String) {
+        return _fromJson(jsonDecode(value), entitySupport.fieldTypes[name]!);
       }
     }
     return _convertResult<T>(value, type);
@@ -148,7 +155,7 @@ class PostgresBox extends Box {
   SelectStep select(List<Field> fields) => _SelectStep(this, fields);
 
   @override
-  QueryStep<T> selectFrom<T>([Type type, String alias]) =>
+  QueryStep<T> selectFrom<T>([Type? type, String? alias]) =>
       _QueryStep<T>(this, type, []);
 
   @override
@@ -165,7 +172,7 @@ class PostgresBox extends Box {
     return keyOf(entity);
   }
 
-  String _fieldExpression(String field, dynamic value) {
+  String? _fieldExpression(String field, dynamic value) {
     var fieldExpressionMatcher = matcher<dynamic, String>()
         .whenNull((v) => 'NULL')
         .when(
@@ -246,6 +253,7 @@ class PostgresBox extends Box {
   Future<PostgreSQLConnection> get _openConnection async {
     if (_connection.isClosed) {
       await _connection.open();
+      _createIndexes();
     }
     return _connection;
   }
@@ -277,7 +285,24 @@ class PostgresBox extends Box {
   }
 
   @override
-  DeleteStep<T> deleteFrom<T>([Type type]) => _DeleteStep<T>(this, type ?? T);
+  DeleteStep<T> deleteFrom<T>([Type? type]) => _DeleteStep<T>(this, type ?? T);
+
+  void _createIndexes() {
+    registry.entries.forEach((type, entitySupport) {
+      var sequence = 1;
+      entitySupport.indexes.forEach((index) {
+        var tableName = _snakeCase(entitySupport.name);
+        var keys = <String, dynamic>{};
+        index.fields.forEach((field) {
+          keys[field.name] =
+              field.direction == Direction.ascending ? 'asc' : 'desc';
+        });
+        _connection.execute(
+            'create index if not exists ${tableName}_idx_$sequence'
+            ' on $tableName (${keys.entries.map((entry) => '${entry.key} ${entry.value}').join(', ')}');
+      });
+    });
+  }
 }
 
 class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
@@ -318,7 +343,7 @@ class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
   @override
   Future execute() async {
     var connection = await box._openConnection;
-    var entitySupport = box.registry.lookup(type ?? T);
+    var entitySupport = box.registry.lookup(type);
     var tableName = _snakeCase(entitySupport.name);
     await connection.execute(
       'DELETE FROM "$tableName"${condition.isNotEmpty ? ' WHERE $condition' : ''}',
@@ -332,7 +357,7 @@ class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
 }
 
 class _DeleteWhereStep<T> extends _WhereStep<T, _DeleteStep<T>> {
-  _DeleteWhereStep(String field, DeleteStep<T> delete) : super(field, delete);
+  _DeleteWhereStep(String field, _DeleteStep<T> delete) : super(field, delete);
 
   @override
   _DeleteStep<T> createNextStep(
@@ -353,9 +378,9 @@ abstract class _TypedStep<T, S extends _TypedStep<T, S>> {
 
   Map<_Table, String> get joins;
 
-  WhereStep<T, S> and(String field) => _AndStep(field, this);
+  WhereStep<T, S> and(String field) => _AndStep(field, this as S);
 
-  WhereStep<T, S> or(String field) => _OrStep(field, this);
+  WhereStep<T, S> or(String field) => _OrStep(field, this as S);
 
   S addCondition(String condition, Map<String, dynamic> bindings);
 
@@ -371,13 +396,13 @@ abstract class _TypedStep<T, S extends _TypedStep<T, S>> {
 }
 
 class _SelectStep implements SelectStep {
-  final Box _box;
+  final PostgresBox _box;
   final List<Field> _fields;
 
   _SelectStep(this._box, this._fields);
 
   @override
-  _QueryStep from(Type type, [String alias]) => _QueryStep(_box, type, _fields);
+  _QueryStep from(Type type, [String? alias]) => _QueryStep(_box, type, _fields);
 }
 
 class _QueryStep<T> extends _ExpectationStep<T>
@@ -386,7 +411,7 @@ class _QueryStep<T> extends _ExpectationStep<T>
   @override
   final Map<String, int> latestIndex;
 
-  _QueryStep(PostgresBox box, Type type, List<Field> fields)
+  _QueryStep(PostgresBox box, Type? type, List<Field> fields)
       : latestIndex = {},
         super(box, type ?? T, fields);
 
@@ -411,7 +436,7 @@ class _QueryStep<T> extends _ExpectationStep<T>
       _QueryWhereStep(field, this);
 
   @override
-  JoinStep<T> innerJoin(Type type, [String alias]) => _JoinStep(type, this);
+  JoinStep<T> innerJoin(Type type, [String? alias]) => _JoinStep(type, this);
 
   @override
   _QueryStep<T> addCondition(String condition, Map<String, dynamic> bindings) =>
@@ -528,7 +553,7 @@ class _WhereStep<T, S extends _TypedStep<T, S>> implements WhereStep<T, S> {
     }
   }
 
-  String _fieldName(String field, {bool asJson = false, Type joinType}) {
+  String _fieldName(String field, {bool asJson = false, Type? joinType}) {
     if (field.contains('.')) {
       var parts = field.split('.');
       if (step.box.objectRepresentation == ObjectRepresentation.json &&
@@ -545,7 +570,7 @@ class _WhereStep<T, S extends _TypedStep<T, S>> implements WhereStep<T, S> {
     }
   }
 
-  bool _isTable(String name, Type joinType) =>
+  bool _isTable(String name, Type? joinType) =>
       step.box.registry.lookup(step.type).name == name ||
       (joinType != null && step.box.registry.lookup(joinType).name == name) ||
       step.joins.keys.any((joinTable) => joinTable.alias != null
@@ -620,11 +645,11 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
 
   _ExpectationStep.fromExisting(
     _ExpectationStep step, {
-    String conditions,
-    Map<String, dynamic> bindings,
-    Map<String, String> order,
-    Map<_Table, String> joins,
-    List<Field> selectFields,
+    String? conditions,
+    Map<String, dynamic>? bindings,
+    Map<String, String>? order,
+    Map<_Table, String>? joins,
+    List<Field>? selectFields,
   })  : box = step.box,
         condition = conditions ?? step.condition,
         joins = joins ?? step.joins,
@@ -641,7 +666,7 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
 class _Table {
   final Type type;
   final String name;
-  final String alias;
+  final String? alias;
 
   _Table(this.type, this.name, [this.alias]);
 }
