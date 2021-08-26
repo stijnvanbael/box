@@ -340,18 +340,15 @@ abstract class EntitySupport<T> {
 
   List<String> get fields => fieldAccessors.keys.toList();
 
-  T? deserialize(Map<String, dynamic>? map);
+  T deserialize(Map<String, dynamic> map);
 
   Map<String, dynamic> serialize(T entity);
 
-  DateTime? deserializeDateTime(dynamic input) => input != null
-      ? input is DateTime
-          ? input
-          : DateTime.parse(input)
-      : null;
+  DateTime deserializeDateTime(dynamic input) =>
+      input is DateTime ? input : DateTime.parse(input);
 
-  E? deserializeEntity<E>(Map<String, dynamic>? map) =>
-      map != null ? registry!.lookup<E>().deserialize(map) : null;
+  E deserializeEntity<E>(Map<String, dynamic> map) =>
+      registry!.lookup<E>().deserialize(map);
 
   Map<String, dynamic>? serializeEntity<E>(E? entity) =>
       entity != null ? registry!.lookup<E>().serialize(entity) : null;
@@ -359,10 +356,7 @@ abstract class EntitySupport<T> {
   String? serializeEnum(dynamic value) =>
       value?.toString().substring(value.toString().indexOf('.') + 1);
 
-  E? deserializeEnum<E>(String? value, List<E> values) {
-    if (value == null) {
-      return null;
-    }
+  E deserializeEnum<E>(String value, List<E> values) {
     var filtered = values.where((element) => serializeEnum(element) == value);
     if (filtered.isEmpty) {
       throw ArgumentError(

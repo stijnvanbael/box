@@ -1,3 +1,7 @@
+0.3.3+1 Null safety fixes
+-------------------------
+* [x] Null safety fixes
+
 0.3.3 Autoconvert
 -----------------
 * [x] Convert types like enums and DateTime in MongoDB queries and deletes

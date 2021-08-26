@@ -34,7 +34,7 @@ class FirestoreBox extends Box {
   }
 
   @override
-  Future<T> find<T>(dynamic key, [Type? type]) async {
+  Future<T?> find<T>(dynamic key, [Type? type]) async {
     _verifyNoCompositeKey(key);
     var connection = await _connect();
     var entitySupport = registry.lookup(type ?? T);
