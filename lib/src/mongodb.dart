@@ -24,10 +24,10 @@ class MongoDbBox extends Box {
   MongoDbBox(this.connectionString, Registry registry) : super(registry);
 
   @override
-  Future<T> find<T>(key, [Type? type]) => _autoRecover(() async {
+  Future<T?> find<T>(key, [Type? type]) => _autoRecover(() async {
         var collection = await _collectionFor<T>(type);
         var document = await collection.findOne(where.eq('_id', _toId(key)));
-        return _toEntity<T>(document, type);
+        return document != null ? _toEntity<T>(document, type) : null;
       });
 
   @override
@@ -132,7 +132,7 @@ class MongoDbBox extends Box {
     var wrapped = Map<String, dynamic>.from(document);
     if (keyFields.length == 1) {
       var key = document[keyFields.first];
-      if (key.length == 24) {
+      if (key?.length == 24) {
         try {
           key = ObjectId.fromHexString(key);
         } catch (e) {

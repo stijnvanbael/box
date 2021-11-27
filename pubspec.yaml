@@ -17,4 +17,5 @@ dependencies:
 dev_dependencies:
   test: ^1.17.8
   build_runner: ^1.11.1
-  box_generator: ^0.3.3+1
+  box_generator: #^0.3.3+1
+    path: ../box_generator
