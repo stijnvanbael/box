@@ -277,9 +277,12 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
       _autoRecoverStream(() async* {
         var collection = await box._collectionFor<T>(type);
         yield* collection
-            .find({r'$query': selector, r'$orderby': _order})
-            .skip(offset) // TODO: find a more efficient way to do this
-            .take(limit)
+            .modernFind(
+              filter: selector,
+              sort: _order,
+              skip: offset > 0 ? offset : null,
+              limit: limit,
+            )
             .map(_applySelectFields);
       });
 
