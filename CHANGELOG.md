@@ -1,3 +1,7 @@
+0.3.3+2 Latest versions
+-------------------------
+* [x] Update to latest versions of dependencies
+
 0.3.3+1 Null safety fixes
 -------------------------
 * [x] Null safety fixes
