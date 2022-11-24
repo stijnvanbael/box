@@ -284,7 +284,7 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
   Map<String, dynamic> _applyFieldAliases(Map<String, dynamic> document) {
     var result = <String, dynamic>{};
     _selectFields.forEach((field) {
-      result[field.alias ?? field.name] = _getValue(document, field.name);
+      result[field.alias] = _getValue(document, field.name);
     });
     return result;
   }

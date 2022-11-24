@@ -42,7 +42,7 @@ class MongoDbBox extends Box {
         var collection = await _collectionFor(entity.runtimeType);
         await collection.insertOne(document);
         var id = document['_id'];
-        return (id is String ? id : id.toHexString()) as K;
+        return (id is ObjectId ? id.toHexString() : id) as K;
       });
 
   @override
@@ -54,7 +54,7 @@ class MongoDbBox extends Box {
                 entitySupport.serialize(entity), entitySupport.keyFields))
             .toList();
         await collection.insertAll(documents,
-            writeConcern: WriteConcern.ACKNOWLEDGED);
+            writeConcern: WriteConcern.acknowledged);
       });
 
   Future<DbCollection> _collectionFor<T>(Type? type) async {
@@ -63,7 +63,7 @@ class MongoDbBox extends Box {
   }
 
   Future _connect() async {
-    if (_db == null || _db!.state != State.OPEN || !_db!.isConnected) {
+    if (_db == null || _db!.state != State.open || !_db!.isConnected) {
       try {
         _db = await Db.create(connectionString);
         await _db!.open(secure: connectionString.startsWith('mongodb+srv:'));
@@ -175,7 +175,7 @@ class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
   Future execute() => _autoRecover(() async {
         var collection = await box._collectionFor(type);
         await collection.remove(selector,
-            writeConcern: WriteConcern.ACKNOWLEDGED);
+            writeConcern: WriteConcern.acknowledged);
       });
 
   @override

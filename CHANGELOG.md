@@ -1,3 +1,8 @@
+0.3.4 Dart 2.14
+-------------------------
+* [x] Update to Dart 2.14
+
+
 0.3.3+2 Latest versions
 -------------------------
 * [x] Update to latest versions of dependencies
