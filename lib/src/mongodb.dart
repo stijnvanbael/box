@@ -40,7 +40,14 @@ class MongoDbBox extends Box {
         var document =
             _wrapKey(entitySupport.serialize(entity), entitySupport.keyFields);
         var collection = await _collectionFor(entity.runtimeType);
-        await collection.insertOne(document);
+        var result = await collection.replaceOne(
+          {'_id': document['_id']},
+          document,
+          upsert: true,
+        );
+        if (result.isFailure) {
+          throw StateError('Failed to upsert');
+        }
         var id = document['_id'];
         return (id is ObjectId ? id.toHexString() : id) as K;
       });
