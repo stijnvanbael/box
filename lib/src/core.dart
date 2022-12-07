@@ -356,6 +356,18 @@ abstract class EntitySupport<T> {
   String? serializeEnum(dynamic value) =>
       value?.toString().substring(value.toString().indexOf('.') + 1);
 
+  dynamic serializeDynamic(dynamic value) {
+    if (value is String ||
+        value is num ||
+        value is bool ||
+        value is Iterable ||
+        value is Map) {
+      return value;
+    } else {
+      return value.toJson();
+    }
+  }
+
   E deserializeEnum<E>(String value, List<E> values) {
     var filtered = values.where((element) => serializeEnum(element) == value);
     if (filtered.isEmpty) {

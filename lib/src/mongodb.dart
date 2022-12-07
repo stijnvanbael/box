@@ -46,7 +46,7 @@ class MongoDbBox extends Box {
           upsert: true,
         );
         if (result.isFailure) {
-          throw StateError('Failed to upsert');
+          throw StateError('Failed to upsert: ${result.writeError!.errmsg}');
         }
         var id = document['_id'];
         return (id is ObjectId ? id.toHexString() : id) as K;
@@ -145,6 +145,9 @@ class MongoDbBox extends Box {
         } catch (e) {
           // Not a hex string
         }
+      }
+      if (key == null) {
+        key = ObjectId();
       }
       wrapped['_id'] = key;
     } else {
