@@ -314,7 +314,7 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
           : record[name];
 
   @override
-  Future<T> unique() => _autoRecover(() async {
+  Future<T?> unique() => _autoRecover(() async {
         var collection = await box._collectionFor<T>(type);
         var document = await collection.findOne(selector);
         return box._toEntity<T>(document, type);
