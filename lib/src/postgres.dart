@@ -303,6 +303,12 @@ class PostgresBox extends Box {
       });
     });
   }
+
+  @override
+  UpdateStep<T> update<T>([Type? type]) {
+    // TODO: implement update
+    throw UnimplementedError();
+  }
 }
 
 class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
@@ -402,7 +408,8 @@ class _SelectStep implements SelectStep {
   _SelectStep(this._box, this._fields);
 
   @override
-  _QueryStep from(Type type, [String? alias]) => _QueryStep(_box, type, _fields);
+  _QueryStep from(Type type, [String? alias]) =>
+      _QueryStep(_box, type, _fields);
 }
 
 class _QueryStep<T> extends _ExpectationStep<T>

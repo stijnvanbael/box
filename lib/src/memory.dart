@@ -58,6 +58,12 @@ class MemoryBox extends Box {
 
   @override
   DeleteStep<T> deleteFrom<T>([Type? type]) => _DeleteStep<T>(this, type ?? T);
+
+  @override
+  UpdateStep<T> update<T>([Type? type]) {
+    // TODO: implement update
+    throw UnimplementedError();
+  }
 }
 
 class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>

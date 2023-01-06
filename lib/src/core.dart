@@ -63,6 +63,30 @@ abstract class Box {
 
   /// Returns true if this Box implementation supports IN conditions.
   bool get supportsIn => true;
+
+  /// Starts a new update statement for the specified type from this Box.
+  UpdateStep<T> update<T>([Type type]);
+}
+
+abstract class UpdateStep<T> {
+  /// Sets a the specified field to the specified value for all matching records.
+  UpdateStep<T> set(String field, dynamic value);
+
+  /// Adds a condition to this update for the specified field. SQL: WHERE <field>
+  WhereStep<T, UpdateWhereStep<T>> where(String field);
+}
+
+abstract class UpdateWhereStep<T> {
+  /// Adds another condition to this update for the specified field. Only results that match both the previous condition
+  /// and the next will be updated. SQL: AND <field>
+  WhereStep<T, UpdateWhereStep<T>> and(String field);
+
+  /// Adds another condition to this update for the specified field. Both results that match the previous condition
+  /// and the next will be update. SQL: OR <field>
+  WhereStep<T, UpdateWhereStep<T>> or(String field);
+
+  /// Executes the update. Returns the number of modified records.
+  Future<int> execute();
 }
 
 abstract class SelectStep {

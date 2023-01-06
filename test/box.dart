@@ -513,6 +513,35 @@ Future runTests(String name, Box Function() boxBuilder) async {
           ]));
     });
   });
+
+  group('$name - Updates', () {
+    test('Update nested property by ID', () async {
+      var crollis = User(
+        id: 'crollis',
+        name: 'Christine Rollis',
+        posts: [
+          Post(text: 'Dart 2.6.1 is out!', keywords: ['dartt'])
+        ],
+      );
+      var box = await setUp();
+      await box.storeAll([crollis]);
+
+      box = await reconnectIfPersistent(box);
+      var result = await box
+          .update<User>()
+          .set('posts.0.keywords', ['dart'])
+          .where('id')
+          .equals('crollis')
+          .execute();
+
+      box = await reconnectIfPersistent(box);
+      expect(
+        (await box.find<User>('crollis'))!.posts!.first,
+        Post(text: 'Dart 2.6.1 is out!', keywords: ['dart']),
+      );
+      expect(result, 1);
+    });
+  });
 }
 
 @entity
@@ -548,8 +577,8 @@ class User {
   User({
     required this.id,
     required this.name,
-     this.lastPost,
-     this.posts,
+    this.lastPost,
+    this.posts,
   });
 
   @override

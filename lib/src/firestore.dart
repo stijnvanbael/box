@@ -101,6 +101,12 @@ class FirestoreBox extends Box {
     // TODO: implement deleteFrom
     throw UnimplementedError();
   }
+
+  @override
+  UpdateStep<T> update<T>([Type? type]) {
+    // TODO: implement update
+    throw UnimplementedError();
+  }
 }
 
 class _SelectStep implements SelectStep {

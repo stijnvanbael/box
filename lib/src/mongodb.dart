@@ -3,6 +3,7 @@ library box.mongodb;
 import 'dart:io';
 
 import 'package:box/core.dart';
+import 'package:box/mongodb.dart';
 import 'package:mongo_dart/mongo_dart.dart'
     show
         ConnectionException,
@@ -146,9 +147,7 @@ class MongoDbBox extends Box {
           // Not a hex string
         }
       }
-      if (key == null) {
-        key = ObjectId();
-      }
+      key ??= ObjectId();
       wrapped['_id'] = key;
     } else {
       wrapped['_id'] = {for (var key in keyFields) key: document[key]};
@@ -159,6 +158,56 @@ class MongoDbBox extends Box {
 
   @override
   DeleteStep<T> deleteFrom<T>([Type? type]) => _DeleteStep<T>(this, type ?? T);
+
+  @override
+  UpdateStep<T> update<T>([Type? type]) => _UpdateStep<T>(this, type ?? T);
+}
+
+class _UpdateStep<T> extends _TypedStep<T, _UpdateStep<T>>
+    implements UpdateStep<T>, UpdateWhereStep<T> {
+  @override
+  final MongoDbBox box;
+  @override
+  final Type type;
+  @override
+  final Map<String, dynamic> selector;
+
+  Map<String, dynamic> setUpdates = {};
+
+  _UpdateStep(this.box, this.type, [this.selector = const {}]);
+
+  _UpdateStep.withSelector(
+    _UpdateStep<T> step,
+    Map<String, dynamic> selector,
+  )   : box = step.box,
+        type = step.type,
+        selector = selector,
+        setUpdates = step.setUpdates;
+
+  @override
+  Future<int> execute() => _autoRecover(() async {
+        var collection = await box._collectionFor(type);
+        return (await collection.updateMany(
+          selector,
+          {'\$set': setUpdates},
+          writeConcern: WriteConcern.acknowledged,
+        ))
+            .nModified;
+      });
+
+  @override
+  UpdateStep<T> set(String field, dynamic value) {
+    setUpdates[field] = value;
+    return this;
+  }
+
+  @override
+  WhereStep<T, UpdateWhereStep<T>> where(String field) =>
+      _UpdateWhereStep(field, this);
+
+  @override
+  _UpdateStep<T> addSelector(Map<String, dynamic> selector) =>
+      _UpdateStep.withSelector(this, selector);
 }
 
 class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
@@ -419,6 +468,14 @@ class _DeleteWhereStep<T> extends _WhereStep<T, _DeleteStep<T>> {
   @override
   _DeleteStep<T> createNextStep(Map<String, dynamic> selector) =>
       _DeleteStep<T>.withSelector(step, combine({field: selector}));
+}
+
+class _UpdateWhereStep<T> extends _WhereStep<T, _UpdateStep<T>> {
+  _UpdateWhereStep(String field, _UpdateStep<T> update) : super(field, update);
+
+  @override
+  _UpdateStep<T> createNextStep(Map<String, dynamic> selector) =>
+      _UpdateStep<T>.withSelector(step, combine({field: selector}));
 }
 
 class _NotStep<T, S extends _TypedStep<T, S>> extends _WhereStep<T, S> {
