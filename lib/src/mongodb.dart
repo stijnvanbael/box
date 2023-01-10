@@ -75,6 +75,12 @@ class MongoDbBox extends Box {
       try {
         _db = await Db.create(connectionString);
         await _db!.open(secure: connectionString.startsWith('mongodb+srv:'));
+        while (_db!.state == State.opening) {
+          await Future.delayed(Duration(milliseconds: 10));
+        }
+        if (_db!.state != State.open) {
+          throw StateError('Failed to open connection');
+        }
         _createIndexes();
       } catch (e) {
         _db = null;

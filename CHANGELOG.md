@@ -1,3 +1,8 @@
+0.3.5+1 Connection not yet open
+-------------------------------
+
+* [x] Fix MongoDB `Error: Db is in the wrong state: State.OPENING`
+
 0.3.5 Granular updates
 ----------------------
 
