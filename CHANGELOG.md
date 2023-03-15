@@ -1,3 +1,8 @@
+0.3.6 Transient
+-------------------------------
+
+* [x] Do not persist transient fields
+
 0.3.5+1 Connection not yet open
 -------------------------------
 

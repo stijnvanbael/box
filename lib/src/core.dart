@@ -294,6 +294,13 @@ class Entity {
 
 const entity = Entity();
 
+// Metadata that indicates a field should not be persisted.
+class Transient {
+  const Transient();
+}
+
+const transient = Transient();
+
 enum Direction { ascending, descending }
 
 const index = Index();
