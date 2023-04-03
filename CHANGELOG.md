@@ -1,3 +1,9 @@
+0.3.7 Named tables
+-------------------------------
+
+* [x] Set the name of the table/collection to persist to using `@Entity(name)`
+* [x] Do not persist static or private fields
+
 0.3.6 Transient
 -------------------------------
 

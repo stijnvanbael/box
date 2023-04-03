@@ -289,7 +289,9 @@ const key = Key();
 
 /// Metadata that indicates a class is an entity.
 class Entity {
-  const Entity();
+  final String? name;
+
+  const Entity([this.name]);
 }
 
 const entity = Entity();
