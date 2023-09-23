@@ -114,7 +114,7 @@ class _SelectStep implements SelectStep {
       _QueryStep(_box, type, _fields);
 }
 
-abstract class _TypedStep<T, S extends _TypedStep<T, S>> {
+abstract mixin class _TypedStep<T, S extends _TypedStep<T, S>> {
   Type get type;
 
   MemoryBox get box;

@@ -376,7 +376,7 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
       });
 }
 
-abstract class _TypedStep<T, S extends _TypedStep<T, S>> {
+abstract mixin class _TypedStep<T, S extends _TypedStep<T, S>> {
   Type get type;
 
   MongoDbBox get box;

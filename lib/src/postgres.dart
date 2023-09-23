@@ -371,7 +371,7 @@ class _DeleteWhereStep<T> extends _WhereStep<T, _DeleteStep<T>> {
       _DeleteStep<T>.withCondition(step, combine(condition), bindings);
 }
 
-abstract class _TypedStep<T, S extends _TypedStep<T, S>> {
+abstract mixin class _TypedStep<T, S extends _TypedStep<T, S>> {
   Type get type;
 
   PostgresBox get box;

@@ -8,7 +8,7 @@ TransformingPredicate<I, T> predicate<I, T>(bool Function(I input) predicate,
 
 T identity<T>(dynamic input) => input as T;
 
-class PatternMatcher<I, O> implements Function {
+class PatternMatcher<I, O> {
   final List<_Case> _cases;
 
   PatternMatcher(this._cases);
