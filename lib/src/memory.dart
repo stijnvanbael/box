@@ -318,7 +318,9 @@ class _Descending<T> extends _Ordering<T> {
   int compare(T object1, T object2) {
     var value1 = valueOf(object1);
     var value2 = valueOf(object2);
-    return -value1.toString().compareTo(value2);
+    return value1 is num
+        ? -value1.compareTo(value2)
+        : -value1.toString().compareTo(value2.toString());
   }
 }
 
