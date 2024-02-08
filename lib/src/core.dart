@@ -1,6 +1,8 @@
 library box.core;
 
 import 'package:collection/collection.dart';
+import 'package:json_annotation/json_annotation.dart';
+import 'package:uuid/uuid.dart';
 
 /// A Box represents a storage, be it a file, a database or simply in-memory storage.
 abstract class Box {
@@ -288,7 +290,7 @@ class Key {
 const key = Key();
 
 /// Metadata that indicates a class is an entity.
-class Entity {
+class Entity extends JsonSerializable {
   final String? name;
 
   const Entity([this.name]);
@@ -379,6 +381,9 @@ abstract class EntitySupport<T> {
 
   DateTime deserializeDateTime(dynamic input) =>
       input is DateTime ? input : DateTime.parse(input);
+
+  UuidValue deserializeUuid(dynamic input) =>
+      input is UuidValue ? input : UuidValue(input);
 
   E deserializeEntity<E>(Map<String, dynamic> map) =>
       registry!.lookup<E>().deserialize(map);

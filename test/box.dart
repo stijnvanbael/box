@@ -20,8 +20,12 @@ void main() async {
   var boxBuilders = {
     'Memory': () => MemoryBox(registry),
     'File': () => FileBox('.box/test', registry),
-    'PostgreSQL': () =>
-        PostgresBox('localhost', registry, database: 'box_test_json'),
+    'PostgreSQL': () => PostgresBox(
+          'localhost',
+          registry,
+          database: 'box_test_json',
+          ssl: false,
+        ),
     'MongoDB': () => MongoDbBox('mongodb://localhost:27017/box_test', registry),
     'Firestore': () => firestore,
   };

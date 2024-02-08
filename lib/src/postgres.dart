@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:postgres/postgres.dart';
+import 'package:postgres/postgres.dart' hide Type;
 import 'package:recase/recase.dart';
 
 import '../core.dart';
@@ -14,7 +14,7 @@ enum ObjectRepresentation {
 }
 
 class PostgresBox extends Box {
-  final PostgreSQLConnection _connection;
+  final Future<Connection> _connection;
   final ObjectRepresentation objectRepresentation;
 
   PostgresBox(
@@ -24,18 +24,24 @@ class PostgresBox extends Box {
     int port = 5432,
     String username = 'postgres',
     String password = 'postgres',
+    bool ssl = true,
     this.objectRepresentation = ObjectRepresentation.json,
-  })  : _connection = PostgreSQLConnection(
-          hostname,
-          port,
-          database,
-          username: username,
-          password: password,
+  })  : _connection = Connection.open(
+          Endpoint(
+            host: hostname,
+            port: port,
+            database: database,
+            username: username,
+            password: password,
+          ),
+          settings: ConnectionSettings(
+            sslMode: ssl ? SslMode.require : SslMode.disable,
+          ),
         ),
         super(registry);
 
   @override
-  Future close() => _connection.close();
+  Future close() async => (await _connection).close();
 
   @override
   Future deleteAll<T>([Type? type]) async {
@@ -55,11 +61,13 @@ class PostgresBox extends Box {
         .join(' AND ');
     var values = (key is Map ? key : {entitySupport.keyFields.first: key})
         as Map<String, dynamic>;
-    var results = await connection.mappedResultsQuery(
-        'SELECT * FROM "$tableName" WHERE $conditions',
-        substitutionValues: values);
+    var results = await connection.execute(
+      Sql.named('SELECT * FROM "$tableName" WHERE $conditions'),
+      parameters: values,
+    );
     if (results.isNotEmpty) {
-      return _mapRow<T>(results.first[tableName]!, entitySupport, type, [], []);
+      return _mapRow<T>(
+          results.first.toColumnMap(), entitySupport, type, [], []);
     }
     return null;
   }
@@ -86,11 +94,11 @@ class PostgresBox extends Box {
         '$orderClause '
         'LIMIT $limit OFFSET $offset';
     try {
-      var results = await connection.mappedResultsQuery(sql,
-          substitutionValues: bindings);
+      var results =
+          await connection.execute(Sql.named(sql), parameters: bindings);
       for (var result in results) {
-        yield _mapRow<T>(
-            result[tableName], entitySupport, type, selectFields, joins.keys);
+        yield _mapRow<T>(result.toColumnMap(), entitySupport, type,
+            selectFields, joins.keys);
       }
     } catch (e) {
       print(
@@ -165,10 +173,10 @@ class PostgresBox extends Box {
     var tableName = _snakeCase(entitySupport.name);
     var fieldNames = entitySupport.fields.map((field) => _snakeCase(field));
     var fieldValues = _addEntityValues('', {}, entity);
-    var statement =
+    var statement = Sql.named(
         'INSERT INTO "$tableName"(${fieldNames.map((field) => '"$field"').join(', ')}) '
-        'VALUES(${entitySupport.fields.map((field) => _fieldExpression(field, entitySupport.getFieldValue(field, entity))).join(', ')})';
-    await connection.execute(statement, substitutionValues: fieldValues);
+        'VALUES(${entitySupport.fields.map((field) => _fieldExpression(field, entitySupport.getFieldValue(field, entity))).join(', ')})');
+    await connection.execute(statement, parameters: fieldValues);
     return keyOf(entity);
   }
 
@@ -213,7 +221,9 @@ class PostgresBox extends Box {
     var entitySupport = registry.lookup(entity.runtimeType);
     for (var field in entitySupport.fields) {
       var value = entitySupport.getFieldValue(field, entity);
-      _addFieldValue(prefix + field, values, value);
+      if (value != null) {
+        _addFieldValue(prefix + field, values, value);
+      }
     }
     return values;
   }
@@ -250,12 +260,10 @@ class PostgresBox extends Box {
     }
   }
 
-  Future<PostgreSQLConnection> get _openConnection async {
-    if (_connection.isClosed) {
-      await _connection.open();
-      _createIndexes();
-    }
-    return _connection;
+  Future<Connection> get _openConnection async {
+    final connection = await _connection;
+    _createIndexes(connection);
+    return connection;
   }
 
   dynamic _toJson(dynamic object) {
@@ -268,9 +276,7 @@ class PostgresBox extends Box {
         .when(any([typeIs<String>(), typeIs<num>(), typeIs<bool>()]), (v) => v)
         .otherwise((input) {
       var entitySupport = registry.lookup(object.runtimeType);
-      return entitySupport != null
-          ? entitySupport.serialize(input)
-          : input.toJson();
+      return entitySupport.serialize(input);
     }).apply(object);
   }
 
@@ -287,7 +293,7 @@ class PostgresBox extends Box {
   @override
   DeleteStep<T> deleteFrom<T>([Type? type]) => _DeleteStep<T>(this, type ?? T);
 
-  void _createIndexes() {
+  void _createIndexes(Connection connection) {
     registry.entries.forEach((type, entitySupport) {
       var sequence = 1;
       entitySupport.indexes.forEach((index) {
@@ -297,9 +303,9 @@ class PostgresBox extends Box {
           keys[field.name] =
               field.direction == Direction.ascending ? 'asc' : 'desc';
         });
-        _connection.execute(
+        connection.execute(Sql.named(
             'create index if not exists ${tableName}_idx_$sequence'
-            ' on $tableName (${keys.entries.map((entry) => '${entry.key} ${entry.value}').join(', ')}');
+            ' on $tableName (${keys.entries.map((entry) => '${entry.key} ${entry.value}').join(', ')}'));
       });
     });
   }
@@ -353,7 +359,7 @@ class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
     var tableName = _snakeCase(entitySupport.name);
     await connection.execute(
       'DELETE FROM "$tableName"${condition.isNotEmpty ? ' WHERE $condition' : ''}',
-      substitutionValues: bindings,
+      parameters: bindings,
     );
   }
 
@@ -670,7 +676,7 @@ class _ExpectationStep<T> extends ExpectationStep<T> {
       condition, bindings, _order, type, limit, offset, _selectFields, joins);
 }
 
-class _Table {
+class _Table<T extends Object> {
   final Type type;
   final String name;
   final String? alias;
