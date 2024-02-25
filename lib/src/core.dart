@@ -383,7 +383,7 @@ abstract class EntitySupport<T> {
       input is DateTime ? input : DateTime.parse(input);
 
   UuidValue deserializeUuid(dynamic input) =>
-      input is UuidValue ? input : UuidValue(input);
+      input is UuidValue ? input : UuidValue.fromString(input);
 
   E deserializeEntity<E>(Map<String, dynamic> map) =>
       registry!.lookup<E>().deserialize(map);

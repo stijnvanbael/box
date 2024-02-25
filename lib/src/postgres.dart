@@ -1,7 +1,8 @@
 import 'dart:convert';
 
-import 'package:postgres/postgres.dart' hide Type;
+import 'package:postgres/postgres.dart' hide Type, Box;
 import 'package:recase/recase.dart';
+import 'package:uuid/uuid.dart';
 
 import '../core.dart';
 import 'pattern_matcher.dart';
@@ -152,9 +153,13 @@ class PostgresBox extends Box {
   dynamic _deserialize<T>(String name, dynamic value, [Type? type]) {
     if (objectRepresentation == ObjectRepresentation.json && value is String) {
       var entitySupport = registry.lookup<T>(type);
-      if (entitySupport.fieldTypes[name] != String) {
+      if (![String, UuidValue].contains(entitySupport.fieldTypes[name])) {
         return _fromJson(jsonDecode(value), entitySupport.fieldTypes[name]!);
       }
+    } else if (value is DateTime) {
+      return value.toIso8601String();
+    } else if (value is UndecodedBytes) {
+      return value.asString;
     }
     return _convertResult<T>(value, type);
   }
@@ -188,7 +193,9 @@ class PostgresBox extends Box {
               typeIs<String>(),
               typeIs<num>(),
               typeIs<DateTime>(),
-              typeIs<bool>()
+              typeIs<bool>(),
+              typeIs<UuidValue>(),
+              typeIs<Enum>(),
             ]),
             (v) => '@$field')
         .whenIs<Iterable>((v) => _arrayExpression(v, field))
@@ -240,6 +247,9 @@ class PostgresBox extends Box {
               typeIs<bool>()
             ]),
             (v) => values[prefix] = v)
+        .whenIs<UuidValue>((v) => values[prefix] = v.toString())
+        .whenIs<Enum>((v) => values[prefix] =
+            v.toString().substring(v.toString().indexOf('.') + 1))
         .whenIs<Iterable>((v) => _addArrayValues(prefix, values, v))
         .otherwise((v) =>
             objectRepresentation == ObjectRepresentation.typesAndArrays
@@ -273,6 +283,8 @@ class PostgresBox extends Box {
             (o) => o.map((key, value) => MapEntry(key, _toJson(value))))
         .whenIs<Iterable>((o) => o.map((value) => _toJson(value)).toList())
         .whenIs<DateTime>((o) => o.toIso8601String())
+        .whenIs<UuidValue>((o) => o.toString())
+        .whenIs<Enum>((o) => o.toString())
         .when(any([typeIs<String>(), typeIs<num>(), typeIs<bool>()]), (v) => v)
         .otherwise((input) {
       var entitySupport = registry.lookup(object.runtimeType);
@@ -282,11 +294,11 @@ class PostgresBox extends Box {
 
   dynamic _fromJson(dynamic json, Type type) {
     return matcher<dynamic, dynamic>()
-        .when(any([typeIs<String>(), typeIs<num>(), typeIs<bool>()]), (v) => v)
         .whenIs<Iterable>(
             (iterable) => iterable.map((e) => _fromJson(e, dynamic)).toList())
         .whenIs<Map<String, dynamic>>((map) => map.map(
             (String key, value) => MapEntry(key, _fromJson(value, dynamic))))
+        .otherwise((v) => v)
         .apply(json);
   }
 
