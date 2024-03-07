@@ -185,8 +185,8 @@ class PostgresBox extends Box {
     final statement = Sql.named(
       'INSERT INTO "$tableName"(${fieldNames.map((field) => '"$field"').join(', ')}) '
       'VALUES(${fields.map((field) => _fieldExpression(field, entitySupport.getFieldValue(field, entity))).join(', ')}) '
-      'ON CONFLICT (${entitySupport.keyFields.join(', ')}) DO UPDATE SET '
-      '${fields.where((f) => !entitySupport.keyFields.contains(f)).map((field) => '"${_snakeCase(field)}" = ${_fieldExpression(field, entitySupport.getFieldValue(field, entity))}').join(', ')}',
+      '${entitySupport.keyFields.isNotEmpty ? 'ON CONFLICT (${entitySupport.keyFields.join(', ')}) DO UPDATE SET '
+          '${fields.where((f) => !entitySupport.keyFields.contains(f)).map((field) => '"${_snakeCase(field)}" = ${_fieldExpression(field, entitySupport.getFieldValue(field, entity))}').join(', ')}' : ''}',
     );
     await connection.execute(statement, parameters: fieldValues);
     return keyOf(entity);
