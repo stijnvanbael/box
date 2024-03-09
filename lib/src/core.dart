@@ -109,7 +109,7 @@ abstract class DeleteStep<T> {
   WhereStep<T, DeleteStep<T>> or(String field);
 
   /// Executes the delete with the specified conditions.
-  Future execute();
+  Future<int> execute();
 }
 
 abstract class QueryStep<T> extends ExpectationStep<T> {

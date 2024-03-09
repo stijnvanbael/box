@@ -155,8 +155,13 @@ class PostgresBox extends Box {
   dynamic _deserialize<T>(String name, dynamic value, [Type? type]) {
     if (objectRepresentation == ObjectRepresentation.json && value is String) {
       var entitySupport = registry.lookup<T>(type);
-      if (![String, UuidValue].contains(entitySupport.fieldTypes[name])) {
-        return _fromJson(jsonDecode(value), entitySupport.fieldTypes[name]!);
+      var fieldType = entitySupport.fieldTypes[name];
+      if (fieldType == null) {
+        // TODO: workaround for now, but we need a better solution for polymorphic types
+        return value;
+      }
+      if (![String, UuidValue].contains(fieldType)) {
+        return _fromJson(jsonDecode(value), fieldType);
       }
     } else if (value is DateTime) {
       return value.toIso8601String();
@@ -382,14 +387,16 @@ class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
         bindings = bindings;
 
   @override
-  Future execute() async {
-    var connection = await box._openConnection;
-    var entitySupport = box.registry.lookup(type);
-    var tableName = _snakeCase(entitySupport.name);
-    await connection.execute(
-      'DELETE FROM "$tableName"${condition.isNotEmpty ? ' WHERE $condition' : ''}',
+  Future<int> execute() async {
+    final connection = await box._openConnection;
+    final entitySupport = box.registry.lookup(type);
+    final tableName = _snakeCase(entitySupport.name);
+    final result = await connection.execute(
+      Sql.named(
+          'DELETE FROM "$tableName"${condition.isNotEmpty ? ' WHERE $condition' : ''}'),
       parameters: bindings,
     );
+    return result.affectedRows;
   }
 
   @override

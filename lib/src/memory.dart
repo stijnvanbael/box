@@ -87,8 +87,15 @@ class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
         predicate = predicate;
 
   @override
-  Future execute() async => (await box.entitiesFor(type))
-      .removeWhere((key, value) => predicate!.evaluate(value));
+  Future<int> execute() async {
+    var removed = 0;
+    (await box.entitiesFor(type)).removeWhere((key, value) {
+      var result = predicate!.evaluate(value);
+      if (result) removed++;
+      return result;
+    });
+    return removed;
+  }
 
   @override
   WhereStep<T, DeleteStep<T>> where(String field) =>

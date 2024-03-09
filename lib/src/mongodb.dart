@@ -237,10 +237,11 @@ class _DeleteStep<T> extends _TypedStep<T, _DeleteStep<T>>
         selector = selector;
 
   @override
-  Future execute() => _autoRecover(() async {
-        var collection = await box._collectionFor(type);
-        await collection.remove(selector,
+  Future<int> execute() => _autoRecover(() async {
+        final collection = await box._collectionFor(type);
+        final removed = await collection.remove(selector,
             writeConcern: WriteConcern.acknowledged);
+        return removed['nRemoved'];
       });
 
   @override
